@@ -12,6 +12,8 @@ benchmark suites, persist results, and compare models with a judge LLM.
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - A running model provider (e.g. Ollama on `localhost:11434`, or LM Studio on
   `localhost:1234`)
+- **Node 18+** — only for web frontend development/build (`web/`); not required
+  for CLI-only use
 
 ## Setup
 
@@ -104,6 +106,8 @@ defaults:
    uv run elenchos show <run-id>
    ```
 
+6. **Or use the web UI** — see [Web UI](#web-ui) (`elenchos serve` + browser).
+
 ## Commands
 
 Global option: `-v` / `--verbose` for debug logging on stderr.
@@ -121,7 +125,7 @@ Global option: `-v` / `--verbose` for debug logging on stderr.
 | `elenchos show <run-id>` | Show run details and outputs |
 | `elenchos compare <run-id> …` | Compare runs with a judge LLM |
 | `elenchos report --runs <id> …` | Build a leaderboard (`--format md\|csv\|json`) |
-| `elenchos serve` | Start the web UI backend (requires `web` extra) |
+| `elenchos serve [--open]` | Start web UI + BFF (requires `web` extra) |
 
 ### `run` options
 
@@ -153,15 +157,10 @@ time.
 
 ## Web UI
 
-Elenchos includes a local web UI backed by a FastAPI **BFF** (backend-for-frontend)
-in `src/elenchos/web/`. The UI and the CLI share the same data directory
-(`~/.elenchos/`).
-
-| Mode | Status | How to run |
-|---|---|---|
-| BFF (JSON API) | **Available** | `elenchos serve` |
-| Frontend dev server (Vite) | Planned — [`docs/fe-dev-plan.md`](docs/fe-dev-plan.md) Phase 3 | BFF + `npm run dev` in `web/` |
-| Production (built UI from wheel) | Planned — Phase 6 | `elenchos serve --open` |
+Local web UI for browsing benchmark suites, launching runs with live progress,
+inspecting results, comparing runs with a judge, and building leaderboards. A
+FastAPI **BFF** in `src/elenchos/web/` wraps the same Python domain code as the
+CLI; the React frontend lives in `web/`. Both read and write `~/.elenchos/`.
 
 Design: [`docs/fe-design.md`](docs/fe-design.md) · build plan:
 [`docs/fe-dev-plan.md`](docs/fe-dev-plan.md).
@@ -169,58 +168,41 @@ Design: [`docs/fe-design.md`](docs/fe-design.md) · build plan:
 ### Prerequisites
 
 - Python 3.11+ with the `web` optional dependency group
-- **Node 18+** — required once the `web/` frontend project lands (Phase 3); not
-  needed for the BFF-only workflow below
+- **Node 18+** — for frontend development and building static assets (`web/`)
+- A running model provider (same as CLI)
 
-### Backend (BFF)
-
-Install web dependencies and start the server (defaults to `127.0.0.1:8765`):
+Install Python web deps once:
 
 ```bash
 uv sync --all-groups --extra web
-uv run elenchos serve
 ```
 
-Options: `--host` (default `127.0.0.1`), `--port` (default `8765`). Binding to a
-non-localhost address prints a warning — provider API keys and run data stay
-server-side, but the API is exposed on your network.
+### Screens
 
-**Verify the BFF** (no browser required):
+| Route | Purpose |
+|---|---|
+| `/` | Dashboard — recent runs, comparisons, quick links |
+| `/benchmarks` | List suites (built-in + user) |
+| `/benchmarks/:id` | Suite detail — tasks, prompts, scorers; **Run** button |
+| `/run?benchmark=:id` | Run launcher — model, params, code-exec/judge gates, live progress |
+| `/prompt` | Quick one-off prompt (saved as a run) |
+| `/runs` | Run history; multi-select to compare |
+| `/runs/:runId` | Run detail — scores, metrics; expand task for prompt/output |
+| `/compare?runs=a,b,…` | Judge comparison (pairwise or rubric) |
+| `/comparisons/:id` | Saved comparison detail |
+| `/leaderboard` | Aggregate scores across runs; export md/csv/json |
 
-```bash
-curl localhost:8765/api/health
-curl localhost:8765/api/benchmarks
-curl localhost:8765/api/runs
-```
+Task output is loaded on demand from `/api/runs/{run_id}/results/{task_id}/output`
+when you expand a row (run detail omits large outputs from the JSON payload).
 
-Open **OpenAPI docs** at [http://localhost:8765/api/docs](http://localhost:8765/api/docs).
+### Development (BFF + Vite)
 
-Read-only endpoints available today:
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health` | Health check + version |
-| GET | `/api/providers` | Provider names, endpoints, health |
-| GET | `/api/providers/{name}/models` | Models on a provider |
-| GET | `/api/benchmarks` | List benchmark suites |
-| GET | `/api/benchmarks/{id}` | Suite detail (tasks, scorers, run hints) |
-| GET | `/api/runs` | List persisted runs |
-| GET | `/api/runs/{run_id}` | Run detail + per-task results |
-| GET | `/api/runs/{run_id}/results/{task_id}/output` | Raw task output (`text/plain`) |
-
-Create runs via the CLI first (`elenchos run …`); the UI will list them once the
-frontend is wired up.
-
-### Frontend development (planned)
-
-When the `web/` Vite + React project is added (Phase 3), run **two processes** —
-BFF and Vite dev server — in separate terminals:
+Run **two processes** in separate terminals:
 
 **Terminal 1 — BFF**
 
 ```bash
-uv sync --all-groups --extra web
-uv run elenchos serve          # http://localhost:8765
+uv run elenchos serve          # http://127.0.0.1:8765
 ```
 
 **Terminal 2 — frontend**
@@ -232,19 +214,80 @@ npm run dev                    # http://localhost:5173, proxies /api → :8765
 ```
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the
-BFF so the browser stays same-origin for API calls during development.
+BFF; CORS is enabled for the dev origin automatically when no built UI is present.
 
-Run frontend tests with `npm test` (Vitest) from `web/`.
+### Production (single process)
 
-### Production serving (planned)
-
-After Phase 6, a built install serves the UI and API from one process — no Node
-dev server:
+Build the frontend into the Python package, then serve UI and API from one origin:
 
 ```bash
-cd web && npm run build        # emits to src/elenchos/web/static/
-uv build && uv tool install dist/elenchos-*.whl
-elenchos serve --open          # UI + /api on http://127.0.0.1:8765
+cd web && npm run build        # → src/elenchos/web/static/
+uv run elenchos serve --open   # http://127.0.0.1:8765
+```
+
+For an installed wheel: `uv build && uv tool install dist/elenchos-*.whl`, then
+`elenchos serve --open`. No Node dev server required at runtime.
+
+### `serve` options
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | `127.0.0.1` | Bind address |
+| `--port` | `8765` | Listen port |
+| `--open` | off | Open the UI in a browser |
+
+Binding to a non-localhost address prints a warning — provider API keys and run
+data stay server-side, but the API is exposed on your network with no auth.
+
+### HTTP API
+
+Full schema: [http://localhost:8765/api/docs](http://localhost:8765/api/docs) (when
+`elenchos serve` is running).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/health` | Health check + version |
+| GET | `/api/providers` | Provider names, endpoints, health |
+| GET | `/api/providers/{name}/models` | Models on a provider |
+| GET | `/api/benchmarks` | List benchmark suites |
+| GET | `/api/benchmarks/{id}` | Suite detail (`requires_code_exec`, `requires_judge`) |
+| GET | `/api/runs` | List persisted runs |
+| GET | `/api/runs/{run_id}` | Run metadata + per-task results (no inline output) |
+| GET | `/api/runs/{run_id}/results/{task_id}/output` | Raw task output (`text/plain`) |
+| POST | `/api/runs` | Start a benchmark run → `{job_id}`; live progress via jobs |
+| POST | `/api/prompt` | One-off prompt → result + `run_id` |
+| GET | `/api/jobs/{job_id}` | Poll job status (SSE fallback) |
+| GET | `/api/jobs/{job_id}/events` | SSE stream (`run_started`, `task_done`, `run_finished`, `job_error`, …) |
+| POST | `/api/compare` | Start judge comparison → `{job_id}` |
+| GET | `/api/comparisons` | List saved comparisons |
+| GET | `/api/comparisons/{id}` | Comparison detail |
+| POST | `/api/report` | Leaderboard (`format`: `json`, `md`, or `csv`) |
+
+Quick smoke test (no browser):
+
+```bash
+curl localhost:8765/api/health
+curl localhost:8765/api/benchmarks
+curl localhost:8765/api/runs
+```
+
+Example — start a run and watch progress:
+
+```bash
+curl -X POST localhost:8765/api/runs -H 'content-type: application/json' \
+  -d '{"benchmark":"text-reasoning-v1","model":"ollama/llama3.1:8b"}'
+# → {"job_id":"…","run_id":null}
+curl -N localhost:8765/api/jobs/<job_id>/events
+```
+
+Coding suites with `unit_test` scorers require `"allow_code_exec": true` in the
+POST body (same gate as CLI `--allow-code-exec`).
+
+### Tests
+
+```bash
+uv run pytest tests/test_web_api.py tests/test_web_static.py tests/test_web_health.py
+cd web && npm test
 ```
 
 ## Development
@@ -262,9 +305,9 @@ Design and architecture: [`docs/design.md`](docs/design.md). Web UI:
 
 ```
 src/elenchos/           Python package (CLI, providers, runner, scoring)
-src/elenchos/web/       BFF (FastAPI) — JSON API for the web UI
+src/elenchos/web/       BFF (FastAPI) + built static UI (`web/static/`)
 src/elenchos/benchmarks/builtin/   Built-in benchmark suites (.yaml)
-web/                    Frontend source (Vite + React — planned, Phase 3)
+web/                    Frontend source (Vite + React + TypeScript)
 prompts/                Legacy sample prompts (JSONL)
 tests/                  Unit tests
 docs/                   Design docs and provider notes
