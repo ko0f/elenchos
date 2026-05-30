@@ -1,15 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import { RunLauncher } from "../components/RunLauncher";
-import { RunProgress } from "../components/RunProgress";
 
 export function RunPage() {
   const [searchParams] = useSearchParams();
   const benchmarkId = searchParams.get("benchmark") ?? "";
   const navigate = useNavigate();
-  const [jobId, setJobId] = useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.benchmark(benchmarkId),
@@ -17,9 +15,9 @@ export function RunPage() {
     enabled: Boolean(benchmarkId),
   });
 
-  const handleFinished = useCallback(
+  const handleLaunch = useCallback(
     (runId: string) => {
-      void navigate(`/runs/${runId}`, { replace: true });
+      void navigate(`/runs/${runId}`);
     },
     [navigate],
   );
@@ -61,11 +59,7 @@ export function RunPage() {
         </p>
       </header>
 
-      {jobId ? (
-        <RunProgress jobId={jobId} onFinished={handleFinished} />
-      ) : (
-        <RunLauncher suite={data} onLaunch={setJobId} />
-      )}
+      <RunLauncher suite={data} onLaunch={handleLaunch} />
     </>
   );
 }

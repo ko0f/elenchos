@@ -8,7 +8,7 @@ import "./RunLauncher.css";
 
 interface RunLauncherProps {
   suite: SuiteDetail;
-  onLaunch: (jobId: string) => void;
+  onLaunch: (runId: string) => void;
 }
 
 export function RunLauncher({ suite, onLaunch }: RunLauncherProps) {
@@ -54,7 +54,12 @@ export function RunLauncher({ suite, onLaunch }: RunLauncherProps) {
         allow_code_exec: allowCodeExec,
         judge: judge.trim() || undefined,
       });
-      onLaunch(response.job_id);
+      if (!response.run_id) {
+        setError("Run started but no run ID returned");
+        setSubmitting(false);
+        return;
+      }
+      onLaunch(response.run_id);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Failed to start run");
       setSubmitting(false);

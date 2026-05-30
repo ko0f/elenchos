@@ -14,7 +14,7 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "subProcess": true,
+            "subProcess": false,
             "breakOnSystemExit": []
         },
         {
