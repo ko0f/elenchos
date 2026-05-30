@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
+import { FaIcon } from "../components/FaIcon";
 import { ScoreBadge } from "../components/ScoreBadge";
 import { formatDate, meanScore } from "../lib/format";
 import { canCompareRuns } from "../lib/runs";
@@ -142,12 +143,12 @@ export function RunsPage() {
               <td>
                 <button
                   type="button"
-                  className="btn btn--danger btn--sm"
+                  className="btn btn--danger btn--sm btn--icon"
                   aria-label={`Delete ${run.run_id}`}
                   disabled={deleteMutation.isPending}
                   onClick={() => confirmDelete(run.run_id)}
                 >
-                  Delete
+                  <FaIcon icon="trash-can" />
                 </button>
               </td>
             </tr>

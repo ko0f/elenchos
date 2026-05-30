@@ -131,6 +131,35 @@
   font-size: 0.75rem;
 }
 
+.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.4375rem;
+  line-height: 1;
+  border: none;
+  background: transparent;
+}
+
+.btn--icon:hover:not(:disabled) {
+  border: none;
+}
+
+.btn--icon.btn--danger {
+  background: transparent;
+}
+
+.btn--icon.btn--danger:hover:not(:disabled) {
+  background: var(--error-bg);
+  border: none;
+}
+
+.btn--icon .fa-solid,
+.btn--icon .fa-regular,
+.btn--icon .fa-brands {
+  font-size: 0.8125rem;
+}
+
 .page-header__actions {
   margin-top: 0.75rem;
   display: flex;
