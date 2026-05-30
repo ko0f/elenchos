@@ -22,15 +22,13 @@ from elenchos.web.jobs import job_manager
 
 
 @pytest.fixture
-def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+def api_client(tmp_path: Path):
     settings = ElenchosSettings(data_dir=tmp_path)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as client:
         yield client, settings
     app.dependency_overrides.clear()
-    get_settings.cache_clear()
 
 
 @pytest.fixture

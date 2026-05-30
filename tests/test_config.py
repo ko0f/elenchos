@@ -34,15 +34,14 @@ def test_normalize_openai_base_url_keeps_existing_v1():
     )
 
 
-def test_resolve_provider_endpoint_cli_overrides_file(
-    tmp_path: Path,
-):
+def test_resolve_provider_endpoint_cli_overrides_file(tmp_path: Path):
     config_dir = tmp_path / "elenchos"
     config_dir.mkdir()
     (config_dir / "config.yaml").write_text(
         "providers:\n  ollama:\n    base_url: http://file-host:11434\n",
         encoding="utf-8",
     )
+
     settings = ElenchosSettings(data_dir=config_dir)
     endpoint = resolve_provider_endpoint(
         "ollama",
@@ -53,9 +52,7 @@ def test_resolve_provider_endpoint_cli_overrides_file(
     assert endpoint.base_url == "http://cli-host:11434/v1"
 
 
-def test_resolve_provider_endpoint_from_file(
-    tmp_path: Path,
-):
+def test_resolve_provider_endpoint_from_file(tmp_path: Path):
     config_dir = tmp_path / "elenchos"
     config_dir.mkdir()
     (config_dir / "config.yaml").write_text(
@@ -77,13 +74,32 @@ def test_resolve_provider_endpoint_uses_builtin_defaults(
     assert endpoint.base_url == "https://openrouter.ai/api/v1"
 
 
-def test_resolve_provider_endpoint_api_key_from_env_var(
+def test_resolve_provider_endpoint_api_key_from_yaml(
     isolated_settings: ElenchosSettings,
-    monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    config_path = isolated_settings.data_dir / "config.yaml"
+    config_path.write_text(
+        "providers:\n  openrouter:\n    api_key: sk-or-test\n",
+        encoding="utf-8",
+    )
     endpoint = resolve_provider_endpoint("openrouter", settings=isolated_settings)
     assert endpoint.api_key == "sk-or-test"
+
+
+def test_resolve_provider_endpoint_cli_api_key_overrides_yaml(
+    isolated_settings: ElenchosSettings,
+):
+    config_path = isolated_settings.data_dir / "config.yaml"
+    config_path.write_text(
+        "providers:\n  openrouter:\n    api_key: from-yaml\n",
+        encoding="utf-8",
+    )
+    endpoint = resolve_provider_endpoint(
+        "openrouter",
+        settings=isolated_settings,
+        cli_api_key="from-cli",
+    )
+    assert endpoint.api_key == "from-cli"
 
 
 def test_list_provider_names_includes_builtins(
@@ -120,11 +136,14 @@ def test_get_provider_lmstudio_defaults(isolated_settings: ElenchosSettings):
     assert provider.api_key is None
 
 
-def test_get_provider_openrouter_reads_api_key_env(
+def test_get_provider_openrouter_reads_api_key_from_yaml(
     isolated_settings: ElenchosSettings,
-    monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-secret")
+    config_path = isolated_settings.data_dir / "config.yaml"
+    config_path.write_text(
+        "providers:\n  openrouter:\n    api_key: sk-or-secret\n",
+        encoding="utf-8",
+    )
     provider = get_provider("openrouter", settings=isolated_settings)
     assert provider.name == "openrouter"
     assert provider.base_url == "https://openrouter.ai/api/v1"

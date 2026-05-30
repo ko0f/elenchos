@@ -98,8 +98,6 @@ def test_registry_includes_builtin_suite():
 def test_user_suite_overrides_builtin(tmp_path, monkeypatch):
     user_dir = tmp_path / "benchmarks"
     user_dir.mkdir()
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     (user_dir / "text-reasoning-v1.yaml").write_text(
         VALID_SUITE.replace("sample-suite", "text-reasoning-v1"),
         encoding="utf-8",

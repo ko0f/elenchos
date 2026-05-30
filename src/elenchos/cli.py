@@ -78,11 +78,23 @@ def _configure_logging(verbose: bool) -> None:
 
 @app.callback()
 def main_callback(
+    data_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--data-dir",
+            help="Data directory (default ~/.elenchos)",
+            dir_okay=True,
+            file_okay=False,
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable debug logging on stderr"),
     ] = False,
 ) -> None:
+    from elenchos.config import set_cli_data_dir
+
+    set_cli_data_dir(data_dir)
     _configure_logging(verbose)
 
 
@@ -325,7 +337,7 @@ def prompt(
     if not provider.health_check():
         console.print(
             f"[red]Provider {provider.name!r} is unhealthy at {provider.base_url}. "
-            "Check ~/.elenchos/config.yaml providers.[/red]"
+            "Check ~/.elenchos/config.yaml providers section.[/red]"
         )
         raise typer.Exit(code=1)
 

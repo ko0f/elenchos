@@ -138,14 +138,14 @@ class Provider(Protocol):
 |---|---|---|---|
 | `ollama` | `http://localhost:11434` | none | Native API + OpenAI-compat `/v1`. |
 | `lmstudio` | `http://localhost:1234/v1` | none | OpenAI-compatible. |
-| `openrouter` | `https://openrouter.ai/api/v1` | API key (env) | OpenAI-compatible; many models. |
+| `openrouter` | `https://openrouter.ai/api/v1` | API key (config) | OpenAI-compatible; many models. |
 
 Because three of these are OpenAI-compatible, a single `OpenAICompatProvider`
 covers LM Studio and OpenRouter (and Ollama's `/v1`), parameterized by base URL
 and auth. Ollama may additionally use a native adapter if needed.
 
-API keys are read from environment variables (e.g. `OPENROUTER_API_KEY`), never
-stored in config files or results.
+API keys are set in `config.yaml` (`providers.<name>.api_key`) and are never
+written to run files or logs.
 
 ### Model identifier format
 
@@ -261,7 +261,7 @@ table and can emit Markdown/CSV/JSON.
 ## 7. Storage Layout
 
 Plain files under a root dir (default `~/.elenchos/`, override with
-`--data-dir` or `ELENCHOS_DATA_DIR`). Human-inspectable, git-friendly, no DB
+`--data-dir` (default `~/.elenchos`). Human-inspectable, git-friendly, no DB
 needed for v1.
 
 ```
@@ -383,7 +383,7 @@ providers:
     base_url: http://localhost:1234/v1
   openrouter:
     base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    api_key: sk-or-v1-...
 
 defaults:
   temperature: 0.0
@@ -391,7 +391,7 @@ defaults:
   concurrency: 4
 ```
 
-Precedence: CLI flags > `config.yaml` > built-in defaults. API keys via `api_key_env`.
+Precedence: CLI flags > `config.yaml` > built-in defaults.
 
 ## 11. Security & Sandboxing
 
@@ -405,7 +405,7 @@ The `unit_test` scorer executes **model-generated code**, which is untrusted.
   (off by default) or, preferably, run inside a container/`firejail` when
   available.
 
-API keys come only from env vars and are never written to run files or logs.
+API keys live in `config.yaml` and are never written to run files or logs.
 
 ## 12. Error Handling & Resilience
 

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from elenchos.config import BUILTIN_PROVIDERS, ElenchosSettings, resolve_judge_config
+from elenchos.config import BUILTIN_PROVIDERS, ElenchosSettings, get_settings, resolve_judge_config
 from elenchos.console import console
 from elenchos.models import Result, Run, judge_generation_params, parse_model_id
 from elenchos.providers.registry import get_provider
@@ -143,11 +143,12 @@ def _build_judge_context(
     model_id = parse_model_id(judge_model)
     provider = get_provider(model_id.provider, settings=settings)
     defaults = BUILTIN_PROVIDERS.get(model_id.provider)
-    if defaults and defaults.api_key_env and not provider.api_key:
-        env_name = defaults.api_key_env
+    settings = settings or get_settings()
+    if defaults and defaults.requires_api_key and not provider.api_key:
+        config_path = settings.data_dir / "config.yaml"
         raise CompareError(
             f"Judge provider {provider.name!r} requires an API key. "
-            f"Set {env_name}."
+            f"Set providers.{provider.name}.api_key in {config_path}."
         )
     if not provider.health_check():
         raise CompareError(
@@ -234,7 +235,7 @@ def compare_runs(
     on_event: CompareEventCallback = None,
 ) -> tuple[ComparisonArtifact, Path | None]:
     """Compare runs with a judge model; optionally persist artifact."""
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     try:
         judge_config = resolve_judge_config(
             settings=settings,

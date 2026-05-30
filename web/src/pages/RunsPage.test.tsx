@@ -25,6 +25,7 @@ const runs = [
     is_baseline: true,
     baseline_score: 1.0,
     baseline_run_id: "run-a",
+    finished_at: "2025-01-01T00:30:00Z",
   },
   {
     run_id: "run-b",
@@ -35,6 +36,7 @@ const runs = [
     is_baseline: false,
     baseline_score: 0.5,
     baseline_run_id: "run-a",
+    finished_at: "2025-01-01T01:00:00Z",
   },
   {
     run_id: "run-c",
@@ -45,6 +47,7 @@ const runs = [
     is_baseline: false,
     baseline_score: 0.75,
     baseline_run_id: "run-a",
+    finished_at: "2025-01-01T02:30:00Z",
   },
 ];
 
@@ -59,9 +62,13 @@ vi.mock("../api/client", () => ({
     listRuns,
     listComparisons,
     deleteRun,
+    getRunJob: vi.fn(async () => null),
   },
   queryKeys: {
     runs: ["runs"],
+    run: (id: string) => ["runs", id],
+    runJob: (id: string) => ["runs", id, "job"],
+    benchmark: (id: string) => ["benchmarks", id],
     comparisons: ["comparisons"],
   },
 }));

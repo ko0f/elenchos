@@ -1,6 +1,7 @@
 from elenchos.config import (
     BUILTIN_PROVIDERS,
     ElenchosSettings,
+    get_settings,
     list_configured_provider_names,
     load_yaml_config,
     resolve_provider_endpoint,
@@ -18,7 +19,7 @@ def get_provider(
     name: str,
     settings: ElenchosSettings | None = None,
 ) -> OpenAICompatProvider:
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     defaults = BUILTIN_PROVIDERS.get(name)
 
     if defaults is None:

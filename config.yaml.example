@@ -1,8 +1,5 @@
-# Copy to ~/.elenchos/config.yaml (or $ELENCHOS_DATA_DIR/config.yaml).
+# Copy to ~/.elenchos/config.yaml (or pass --data-dir to the CLI).
 # Precedence: CLI flags > this file > built-in defaults.
-#
-# API keys: set via env (recommended), not inline here — e.g. OPENROUTER_API_KEY.
-# See .env.example for ELENCHOS_DATA_DIR.
 
 providers:
   # Built-in providers; omit a block to use defaults (Ollama/LM Studio localhost).
@@ -15,11 +12,16 @@ providers:
   #   base_url: http://192.168.1.50:1234/v1
   openrouter:
     base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    api_key: sk-or-v1-...   # from https://openrouter.ai/keys
 
 defaults:
   concurrency: 4
   max_retries: 3
+
+# Optional judge for compare / vs-baseline:
+# judge:
+#   model: openrouter/anthropic/claude-sonnet-4-6
+#   mode: rubric
 
 # Optional: ~/.elenchos/baselines.json pins baseline runs and rubric comparisons.
 # Example:

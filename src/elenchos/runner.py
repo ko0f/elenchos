@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 
 from elenchos.benchmarks.schema import BenchmarkSuite, GenerationParamsDefaults, Task
-from elenchos.config import ElenchosSettings, resolve_judge_config, resolve_run_defaults
+from elenchos.config import ElenchosSettings, get_settings, resolve_judge_config, resolve_run_defaults
 from elenchos.console import console
 from elenchos.metrics import aggregate_run_summary
 from elenchos.models import (
@@ -421,7 +421,7 @@ def run_suite(
     on_event: RunEventCallback | None = None,
 ) -> SuiteRunOutcome:
     """Run benchmark tasks with optional concurrency, resume, and retries."""
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     effective_concurrency, effective_max_retries = resolve_run_defaults(
         settings=settings,
         cli_concurrency=concurrency,

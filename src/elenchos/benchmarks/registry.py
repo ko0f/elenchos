@@ -14,7 +14,7 @@ from elenchos.benchmarks.schema import (
     SuiteValidationError,
     format_validation_errors,
 )
-from elenchos.config import ElenchosSettings
+from elenchos.config import ElenchosSettings, get_settings
 
 
 class BenchmarkNotFoundError(LookupError):
@@ -33,7 +33,7 @@ class SuiteSummary:
 
 
 def _settings(settings: ElenchosSettings | None) -> ElenchosSettings:
-    return settings or ElenchosSettings()
+    return settings or get_settings()
 
 
 def builtin_benchmarks_dir() -> Path:

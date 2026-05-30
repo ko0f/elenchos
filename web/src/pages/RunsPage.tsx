@@ -3,10 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import type { ComparisonSummary } from "../api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
-import { BaselineScoreBadge } from "../components/BaselineScoreBadge";
 import { FaIcon } from "../components/FaIcon";
-import { ScoreBadge } from "../components/ScoreBadge";
-import { formatDate, meanScore } from "../lib/format";
+import { RunTableProgressCell } from "../components/RunTableProgressCell";
+import { formatDate } from "../lib/format";
 import { canCompareRuns } from "../lib/runs";
 import "../components/RunLauncher.css";
 import "../components/RunPicker.css";
@@ -19,6 +18,10 @@ export function RunsPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.runs,
     queryFn: api.listRuns,
+    refetchInterval: (query) => {
+      const runs = query.state.data ?? [];
+      return runs.some((run) => !run.finished_at) ? 2000 : false;
+    },
   });
   const {
     data: comparisons = [],
@@ -112,7 +115,6 @@ export function RunsPage() {
                 <th>Started</th>
                 <th>Benchmark</th>
                 <th>Model</th>
-                <th>Mean score</th>
                 <th>vs Baseline</th>
                 <th aria-label="Actions" />
               </tr>
@@ -152,11 +154,11 @@ export function RunsPage() {
                   <td>{run.benchmark?.id ?? "—"}</td>
                   <td>{run.model}</td>
                   <td>
-                    <ScoreBadge score={meanScore(run.summary)} />
-                  </td>
-                  <td>
-                    <BaselineScoreBadge
-                      score={run.baseline_score}
+                    <RunTableProgressCell
+                      runId={run.run_id}
+                      finishedAt={run.finished_at}
+                      benchmarkId={run.benchmark?.id}
+                      baselineScore={run.baseline_score}
                       isBaseline={run.is_baseline}
                     />
                   </td>

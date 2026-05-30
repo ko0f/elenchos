@@ -91,8 +91,6 @@ def tiny_suite(tmp_path: Path) -> BenchmarkSuite:
 def test_run_suite_with_mock_provider(
     tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     provider = MockProvider(
         responses={
             "What is 1+1? Reply with the number only.": "2",
@@ -121,8 +119,6 @@ def test_run_suite_with_mock_provider(
 def test_run_suite_records_task_errors(
     tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     provider = MockProvider(
         responses={"What is 1+1? Reply with the number only.": "2"},
         fail_prompts={"Name the capital of Italy in one word."},
@@ -142,7 +138,6 @@ def test_run_suite_records_task_errors(
 
 
 def test_run_suite_rejects_coding_suite_without_flag(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     suite = BenchmarkSuite.model_validate(
         {
             "id": "coding",
@@ -192,7 +187,6 @@ tasks:
 
 
 def test_run_suite_coding_with_mock_provider(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     suite = BenchmarkSuite.model_validate(yaml.safe_load(CODING_SUITE))
 
     good_code = "def add(a, b):\n    return a + b\n"
@@ -235,8 +229,6 @@ def test_aggregate_run_summary():
 def test_run_suite_resumes_partial_run(
     tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     settings = ElenchosSettings(data_dir=tmp_path)
     run_dir, run = create_run(
         model="mock/mock-model",
@@ -279,8 +271,6 @@ def test_run_suite_resumes_partial_run(
 def test_run_suite_resume_retries_errored_task(
     tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     settings = ElenchosSettings(data_dir=tmp_path)
     run_dir, run = create_run(
         model="mock/mock-model",
@@ -333,8 +323,6 @@ def test_run_suite_resume_retries_errored_task(
 def test_run_suite_retries_transient_errors(
     tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     city_prompt = "Name the capital of Italy in one word."
     provider = MockProvider(
         responses={
@@ -358,7 +346,6 @@ def test_run_suite_retries_transient_errors(
 
 
 def test_run_suite_concurrency(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     suite = BenchmarkSuite.model_validate(
         {
             "id": "parallel",
@@ -393,8 +380,6 @@ def test_run_suite_concurrency(tmp_path: Path, monkeypatch):
 def test_run_suite_on_event_emits_lifecycle(
     tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-
     provider = MockProvider(
         responses={
             "What is 1+1? Reply with the number only.": "2",

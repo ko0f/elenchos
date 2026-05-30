@@ -410,10 +410,10 @@ def comparison_detail_from_dict(
     *,
     settings: ElenchosSettings | None = None,
 ) -> ComparisonDetailResponse:
-    from elenchos.config import ElenchosSettings
+    from elenchos.config import get_settings
     from elenchos.storage import get_baseline_comparison_id, get_baseline_run_id
 
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     benchmark_id = payload["benchmark_id"]
     comparison_id = payload["comparison_id"]
     pinned = get_baseline_comparison_id(benchmark_id, settings)

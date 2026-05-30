@@ -1,51 +1,55 @@
 import logging
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_DATA_DIR = Path.home() / ".elenchos"
 
-class Settings(BaseSettings):
+_cli_data_dir: Path | None = None
+
+
+def set_cli_data_dir(path: Path | None) -> None:
+    """Override the data directory for the current CLI invocation."""
+    global _cli_data_dir
+    _cli_data_dir = path
+
+
+def _resolve_data_dir() -> Path:
+    if _cli_data_dir is not None:
+        return _cli_data_dir
+    return DEFAULT_DATA_DIR
+
+
+@dataclass
+class Settings:
     """Legacy LM Studio runner settings."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
 
     lm_studio_base_url: str = "http://localhost:1234/v1"
     lm_studio_api_key: str = "not-needed"
     lm_studio_model: str = ""
-
     results_dir: str = "results"
     request_timeout_s: float = 300.0
     temperature: float = 0.0
     max_tokens: int = 131_072
 
 
-class ElenchosSettings(BaseSettings):
-    """Global settings (env prefix ELENCHOS_). Provider endpoints live in config.yaml."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="ELENCHOS_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    data_dir: Path = Path.home() / ".elenchos"
+@dataclass
+class ElenchosSettings:
+    data_dir: Path = field(default_factory=_resolve_data_dir)
     request_timeout_s: float = 300.0
+
+
+def get_settings() -> ElenchosSettings:
+    return ElenchosSettings()
 
 
 @dataclass(frozen=True)
 class ProviderDefaults:
     base_url: str
-    api_key_env: str | None = None
+    requires_api_key: bool = False
 
 
 BUILTIN_PROVIDERS: dict[str, ProviderDefaults] = {
@@ -53,7 +57,7 @@ BUILTIN_PROVIDERS: dict[str, ProviderDefaults] = {
     "lmstudio": ProviderDefaults(base_url="http://localhost:1234/v1"),
     "openrouter": ProviderDefaults(
         base_url="https://openrouter.ai/api/v1",
-        api_key_env="OPENROUTER_API_KEY",
+        requires_api_key=True,
     ),
 }
 
@@ -72,7 +76,7 @@ def normalize_openai_base_url(url: str) -> str:
 
 
 def load_yaml_config(settings: ElenchosSettings | None = None) -> dict:
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     config_path = settings.data_dir / "config.yaml"
     if not config_path.is_file():
         return {}
@@ -87,7 +91,7 @@ def list_configured_provider_names(
     settings: ElenchosSettings | None = None,
 ) -> list[str]:
     """Return built-in plus user-defined provider names from config.yaml."""
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     yaml_config = load_yaml_config(settings)
     yaml_providers = (yaml_config.get("providers") or {}).keys()
     names = set(BUILTIN_PROVIDERS.keys()) | set(yaml_providers)
@@ -104,24 +108,15 @@ def _resolve_api_key(
     name: str,
     *,
     provider_yaml: dict,
-    defaults: ProviderDefaults | None,
     cli_api_key: str | None = None,
 ) -> str | None:
-    """Resolve API key: CLI > api_key_env from config.yaml or built-in defaults."""
-    if provider_yaml.get("api_key"):
-        logger.warning(
-            "Ignoring providers.%s.api_key in config.yaml; set api_key_env instead.",
-            name,
-        )
-
+    """Resolve API key: CLI > config.yaml providers.{name}.api_key."""
     if cli_api_key:
         return cli_api_key
 
-    api_key_env = provider_yaml.get("api_key_env") or (
-        defaults.api_key_env if defaults else None
-    )
-    if api_key_env:
-        return os.environ.get(str(api_key_env))
+    api_key = provider_yaml.get("api_key")
+    if api_key:
+        return str(api_key)
 
     return None
 
@@ -139,7 +134,7 @@ def resolve_run_defaults(
     cli_max_retries: int | None = None,
 ) -> tuple[int, int]:
     """Resolve run concurrency and retry limits: CLI > config.yaml > built-ins."""
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     yaml_config = load_yaml_config(settings)
     defaults = yaml_config.get("defaults") or {}
     if not isinstance(defaults, dict):
@@ -165,7 +160,7 @@ def resolve_judge_config(
     cli_mode: str | None = None,
 ) -> JudgeConfig:
     """Resolve judge settings: CLI > config.yaml > defaults."""
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     yaml_config = load_yaml_config(settings)
     judge_yaml = yaml_config.get("judge") or {}
     if not isinstance(judge_yaml, dict):
@@ -193,7 +188,7 @@ def resolve_provider_endpoint(
     cli_api_key: str | None = None,
 ) -> ProviderEndpoint:
     """Resolve provider endpoint: CLI > config.yaml > built-in defaults."""
-    settings = settings or ElenchosSettings()
+    settings = settings or get_settings()
     yaml_config = load_yaml_config(settings)
     provider_yaml = _provider_yaml(name, yaml_config)
     defaults = BUILTIN_PROVIDERS.get(name)
@@ -213,7 +208,6 @@ def resolve_provider_endpoint(
     api_key = _resolve_api_key(
         name,
         provider_yaml=provider_yaml,
-        defaults=defaults,
         cli_api_key=cli_api_key,
     )
 

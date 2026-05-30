@@ -14,8 +14,7 @@ from elenchos.storage import (
 
 
 @pytest.fixture
-def data_dir(tmp_path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+def data_dir(tmp_path):
     return tmp_path
 
 

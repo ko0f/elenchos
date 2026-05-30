@@ -50,7 +50,6 @@ def _seed_scored_run(
 
 
 def test_build_leaderboard_ranks_by_mean_score(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     run_a = _seed_scored_run(tmp_path, suffix="a", scores={"t1": 1.0, "t2": 1.0})
     run_b = _seed_scored_run(tmp_path, suffix="b", scores={"t1": 0.5, "t2": 0.5})
     run_c = _seed_scored_run(tmp_path, suffix="c", scores={"t1": 0.0, "t2": 1.0})
@@ -70,7 +69,6 @@ def test_build_leaderboard_ranks_by_mean_score(tmp_path: Path, monkeypatch):
 
 
 def test_build_leaderboard_rejects_mixed_benchmarks(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     run_a = _seed_scored_run(
         tmp_path,
         suffix="a",
@@ -89,7 +87,6 @@ def test_build_leaderboard_rejects_mixed_benchmarks(tmp_path: Path, monkeypatch)
 
 
 def test_format_report_matches_fixture(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     run_a = _seed_scored_run(tmp_path, suffix="a", scores={"t1": 1.0, "t2": 0.5})
     run_b = _seed_scored_run(tmp_path, suffix="b", scores={"t1": 0.0, "t2": 0.0})
 
@@ -108,7 +105,6 @@ def test_format_report_matches_fixture(tmp_path: Path, monkeypatch):
 
 
 def test_build_leaderboard_includes_win_rate(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     run_a = _seed_scored_run(tmp_path, suffix="a", scores={"t1": 1.0})
     run_b = _seed_scored_run(tmp_path, suffix="b", scores={"t1": 0.0})
 

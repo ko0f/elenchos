@@ -10,14 +10,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from elenchos import __version__
-from elenchos.config import ElenchosSettings
+from elenchos.config import ElenchosSettings, get_settings
 from elenchos.models import BenchmarkRef, Result, Run
 
 DEFAULT_TASK_ID = "prompt"
 
 
 def _settings(settings: ElenchosSettings | None) -> ElenchosSettings:
-    return settings or ElenchosSettings()
+    return settings or get_settings()
 
 
 def runs_root(

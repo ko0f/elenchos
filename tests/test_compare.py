@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from elenchos.cli import app
 from elenchos.compare import CompareError, compare_runs
 from elenchos.config import ElenchosSettings, resolve_judge_config
 from elenchos.models import BenchmarkRef, Result
@@ -96,7 +98,6 @@ def test_resolve_judge_config_precedence(tmp_path: Path):
 
 
 def test_compare_pairwise_writes_artifact(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
         "judge:\n  model: mock/judge\n  mode: pairwise\n",
         encoding="utf-8",
@@ -131,7 +132,6 @@ def test_compare_pairwise_writes_artifact(tmp_path: Path, monkeypatch):
 def test_compare_rubric_listwise_winner(tmp_path: Path, monkeypatch):
     import random
 
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
         "judge:\n  model: mock/judge\n  mode: rubric\n",
         encoding="utf-8",
@@ -175,7 +175,6 @@ def test_compare_rubric_listwise_winner(tmp_path: Path, monkeypatch):
 
 
 def test_compare_requires_same_benchmark(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
         "judge:\n  model: mock/judge\n",
         encoding="utf-8",
@@ -242,23 +241,19 @@ def test_build_judge_context_includes_effort(monkeypatch):
 
 def test_build_judge_context_requires_openrouter_api_key(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     from elenchos.compare import CompareError, _build_judge_context
 
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    settings = ElenchosSettings(data_dir=tmp_path)
 
     with pytest.raises(CompareError, match="requires an API key"):
-        _build_judge_context("openrouter/anthropic/claude-opus-4.8")
+        _build_judge_context(
+            "openrouter/anthropic/claude-opus-4.8",
+            settings=settings,
+        )
 
 
 def test_compare_cli_pairwise(tmp_path: Path, monkeypatch):
-    from typer.testing import CliRunner
-
-    from elenchos.cli import app
-
-    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
         "judge:\n  model: mock/judge\n  mode: pairwise\n",
         encoding="utf-8",
@@ -279,7 +274,10 @@ def test_compare_cli_pairwise(tmp_path: Path, monkeypatch):
         lambda *_args, **_kwargs: judge,
     )
 
-    result = CliRunner().invoke(app, ["compare", run_a, run_b])
+    result = CliRunner().invoke(
+        app,
+        ["--data-dir", str(tmp_path), "compare", run_a, run_b],
+    )
     assert result.exit_code == 0
     assert "Win rate" in result.stdout
     assert run_a in result.stdout or "model-a" in result.stdout

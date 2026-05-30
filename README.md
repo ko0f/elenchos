@@ -19,7 +19,7 @@ benchmark suites, persist results, and compare models with a judge LLM.
 
 ```bash
 uv sync --all-groups   # includes dev + web (BFF) dependency groups
-cp .env.example .env   # optional — ELENCHOS_DATA_DIR and API keys
+cp config.yaml.example ~/.elenchos/config.yaml
 ```
 
 Run commands with `uv run elenchos …` from the repo root, or install the package
@@ -27,9 +27,11 @@ into your environment with `uv sync` and call `elenchos` directly.
 
 ## Configuration
 
-Provider endpoints resolve in this order: **CLI flags →
-`~/.elenchos/config.yaml` → built-in defaults**. API keys referenced by
-`api_key_env` in config.yaml come from the environment (e.g. `OPENROUTER_API_KEY`).
+All settings live in **`~/.elenchos/config.yaml`** (copy from
+[`config.yaml.example`](config.yaml.example)). Precedence: **CLI flags →
+config.yaml → built-in defaults**.
+
+Override the data directory with `--data-dir` (default `~/.elenchos`).
 
 ### Multiple LM Studio hosts
 
