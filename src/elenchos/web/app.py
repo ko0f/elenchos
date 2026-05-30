@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from elenchos import __version__
@@ -8,6 +11,12 @@ from elenchos.compare import CompareError
 from elenchos.reporter import ReportError
 from elenchos.runner import SuiteRunError
 from elenchos.web.routers import benchmarks, compare, jobs, providers, runs
+from elenchos.web.static_files import has_built_ui, mount_ui, static_root
+
+VITE_DEV_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
@@ -50,7 +59,13 @@ def _register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-def create_app() -> FastAPI:
+def create_app(
+    *,
+    static_dir: Path | None = None,
+    enable_dev_cors: bool | None = None,
+) -> FastAPI:
+    resolved_static = static_dir or static_root()
+
     app = FastAPI(
         title="Elenchos",
         docs_url="/api/docs",
@@ -58,6 +73,19 @@ def create_app() -> FastAPI:
         redoc_url="/api/redoc",
     )
     _register_exception_handlers(app)
+
+    ui_available = has_built_ui(resolved_static)
+    if enable_dev_cors is None:
+        enable_dev_cors = not ui_available
+
+    if enable_dev_cors:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=VITE_DEV_ORIGINS,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     api = APIRouter(prefix="/api")
 
@@ -72,6 +100,7 @@ def create_app() -> FastAPI:
     api.include_router(compare.router)
 
     app.include_router(api)
+    mount_ui(app, resolved_static)
     return app
 
 

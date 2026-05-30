@@ -3,6 +3,10 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    outDir: "../src/elenchos/web/static",
+    emptyOutDir: true,
+  },
   server: {
     port: 5173,
     proxy: {

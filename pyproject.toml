@@ -35,6 +35,11 @@ elenchos = "elenchos.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+artifacts = [
+  "src/elenchos/web/static",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/elenchos"]
 

@@ -101,6 +101,10 @@ def serve(
         int,
         typer.Option("--port", help="Listen port"),
     ] = 8765,
+    open_browser: Annotated[
+        bool,
+        typer.Option("--open", help="Open the UI in a browser"),
+    ] = False,
 ) -> None:
     """Start the web UI backend (BFF)."""
     try:
@@ -118,7 +122,28 @@ def serve(
             "provider API keys and local run data to the network.[/yellow]"
         )
 
-    console.print(f"[dim]BFF listening on http://{host}:{port}[/dim]")
+    from elenchos.web.static_files import has_built_ui
+
+    url = f"http://{host}:{port}/"
+    if has_built_ui():
+        console.print(f"[dim]UI + API at {url}[/dim]")
+    else:
+        console.print(
+            f"[dim]BFF listening on {url}[/dim] "
+            "[yellow](no built UI — run `cd web && npm run build`)[/yellow]"
+        )
+
+    if open_browser:
+        import threading
+        import time
+        import webbrowser
+
+        def _open() -> None:
+            time.sleep(0.5)
+            webbrowser.open(url)
+
+        threading.Thread(target=_open, daemon=True, name="elenchos-open-browser").start()
+
     uvicorn.run("elenchos.web.app:app", host=host, port=port)
 
 

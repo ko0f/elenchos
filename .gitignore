@@ -13,3 +13,5 @@ results/*.csv
 .ruff_cache/
 dist/
 build/
+src/elenchos/web/static/assets/
+src/elenchos/web/static/index.html
