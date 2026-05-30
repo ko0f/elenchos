@@ -44,3 +44,10 @@ export function aggregateResultsSummary(results: TaskResult[]): Record<string, n
 
   return summary;
 }
+
+export function totalLatencyMs(results: TaskResult[]): number | null {
+  if (results.length === 0) {
+    return null;
+  }
+  return results.reduce((sum, result) => sum + result.latency_ms, 0);
+}

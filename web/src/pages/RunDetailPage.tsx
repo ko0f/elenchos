@@ -3,9 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import type { TaskDoneData } from "../api/types";
-import { formatDate, formatScore, meanScore } from "../lib/format";
+import { formatDate, formatDuration, formatScore, meanScore } from "../lib/format";
 import { jobStatusLabel } from "../lib/jobStatusLabel";
-import { aggregateResultsSummary } from "../lib/runSummary";
+import { aggregateResultsSummary, totalLatencyMs } from "../lib/runSummary";
 import { useJobStream } from "../hooks/useJobStream";
 import { ResultsTable } from "../components/ResultsTable";
 import { ScoreBadge } from "../components/ScoreBadge";
@@ -182,9 +182,9 @@ export function RunDetailPage() {
           </div>
         </div>
         <div className="metric-card">
-          <div className="metric-card__label">P95 latency</div>
+          <div className="metric-card__label">Total time</div>
           <div className="metric-card__value">
-            {metricValue(summary, "p95_latency_ms")}
+            {formatDuration(totalLatencyMs(results))}
           </div>
         </div>
         <div className="metric-card">
