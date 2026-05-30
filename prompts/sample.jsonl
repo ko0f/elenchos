@@ -1,0 +1,3 @@
+{"id": "hello", "prompt": "Reply with exactly: pong"}
+{"id": "math", "prompt": "What is 17 * 23? Reply with the number only."}
+{"id": "reasoning", "prompt": "If a train travels 120 miles in 2 hours, what is its average speed in mph? Reply with the number only."}
