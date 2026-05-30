@@ -9,6 +9,8 @@ dependencies = [
     "openai>=1.68.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.8.0",
+    "pyyaml>=6.0.0",
+    "rich>=13.9.0",
     "typer>=0.15.0",
 ]
 
@@ -35,6 +37,9 @@ package = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that require a live provider (e.g. Ollama)",
+]
 
 [tool.ruff]
 line-length = 88

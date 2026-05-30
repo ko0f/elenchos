@@ -1,6 +1,51 @@
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
+from elenchos.providers.base import GenerationParams, Message
+
+
+@dataclass(frozen=True)
+class ModelId:
+    provider: str
+    model: str
+
+    @property
+    def qualified(self) -> str:
+        return f"{self.provider}/{self.model}"
+
+
+def parse_model_id(value: str) -> ModelId:
+    """Parse ``provider/model`` identifiers (model may contain slashes)."""
+    value = value.strip()
+    if "/" not in value:
+        raise ValueError(
+            f"Invalid model id {value!r}: expected format provider/model"
+        )
+
+    provider, model = value.split("/", 1)
+    if not provider or not model:
+        raise ValueError(
+            f"Invalid model id {value!r}: expected format provider/model"
+        )
+
+    return ModelId(provider=provider, model=model)
+
+
+def build_messages(
+    prompt: str,
+    *,
+    system: str | None = None,
+) -> list[Message]:
+    messages: list[Message] = []
+    if system:
+        messages.append(Message(role="system", content=system))
+    messages.append(Message(role="user", content=prompt))
+    return messages
+
+
+def default_generation_params() -> GenerationParams:
+    return GenerationParams(temperature=0.0, max_tokens=1024)
+
 
 @dataclass
 class PromptCase:
