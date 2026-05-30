@@ -112,7 +112,7 @@ def serve(
     except ImportError as exc:
         console.print(
             "[red]Web dependencies not installed.[/red] "
-            "Run: [bold]uv sync --all-groups --extra web[/bold]"
+            "Run: [bold]uv sync --all-groups[/bold]"
         )
         raise typer.Exit(code=1) from exc
 
@@ -143,6 +143,17 @@ def serve(
             webbrowser.open(url)
 
         threading.Thread(target=_open, daemon=True, name="elenchos-open-browser").start()
+
+    import socket
+
+    bind_host = "127.0.0.1" if host == "localhost" else host
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        if sock.connect_ex((bind_host, port)) == 0:
+            console.print(
+                f"[red]Port {port} already in use.[/red] "
+                f"Stop the other process or use [bold]--port[/bold]."
+            )
+            raise typer.Exit(code=1)
 
     uvicorn.run("elenchos.web.app:app", host=host, port=port)
 

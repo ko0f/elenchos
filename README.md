@@ -18,7 +18,7 @@ benchmark suites, persist results, and compare models with a judge LLM.
 ## Setup
 
 ```bash
-uv sync --all-groups
+uv sync --all-groups   # includes dev + web (BFF) dependency groups
 cp .env.example .env   # optional — override provider URLs and API keys
 ```
 
@@ -125,7 +125,7 @@ Global option: `-v` / `--verbose` for debug logging on stderr.
 | `elenchos show <run-id>` | Show run details and outputs |
 | `elenchos compare <run-id> …` | Compare runs with a judge LLM |
 | `elenchos report --runs <id> …` | Build a leaderboard (`--format md\|csv\|json`) |
-| `elenchos serve [--open]` | Start web UI + BFF (requires `web` extra) |
+| `elenchos serve [--open]` | Start web UI + BFF |
 
 ### `run` options
 
@@ -167,15 +167,9 @@ Design: [`docs/fe-design.md`](docs/fe-design.md) · build plan:
 
 ### Prerequisites
 
-- Python 3.11+ with the `web` optional dependency group
+- Python 3.11+ (web BFF deps install with [Setup](#setup))
 - **Node 18+** — for frontend development and building static assets (`web/`)
 - A running model provider (same as CLI)
-
-Install Python web deps once:
-
-```bash
-uv sync --all-groups --extra web
-```
 
 ### Screens
 

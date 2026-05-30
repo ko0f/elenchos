@@ -30,7 +30,7 @@ health check.
 
 **Run / verify**
 ```bash
-uv sync --all-groups --extra web
+uv sync --all-groups
 uv run elenchos serve            # boots on 127.0.0.1:8765
 curl localhost:8765/api/health   # {"status":"ok","version":"0.1.0"}
 curl localhost:8765/api/docs     # FastAPI OpenAPI UI loads
