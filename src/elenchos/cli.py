@@ -40,8 +40,10 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer(no_args_is_help=True)
 providers_app = typer.Typer(no_args_is_help=True)
+models_app = typer.Typer(no_args_is_help=True)
 bench_app = typer.Typer(no_args_is_help=True)
 app.add_typer(providers_app, name="providers")
+app.add_typer(models_app, name="models")
 app.add_typer(bench_app, name="bench")
 
 
@@ -94,6 +96,49 @@ def providers_list() -> None:
         healthy = provider.health_check()
         status = "[green]healthy[/green]" if healthy else "[red]unhealthy[/red]"
         table.add_row(name, provider.base_url, status)
+
+    console.print(table)
+
+
+@models_app.command("list")
+def models_list(
+    provider_name: Annotated[
+        str,
+        typer.Option("--provider", help="Provider name (ollama, lmstudio, openrouter)"),
+    ],
+) -> None:
+    """List models available on a provider."""
+    if provider_name not in list_provider_names():
+        known = ", ".join(list_provider_names()) or "(none)"
+        console.print(
+            f"[red]Unknown provider {provider_name!r}. Known providers: {known}[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    provider = get_provider(provider_name)
+
+    if not provider.health_check():
+        console.print(
+            f"[red]Provider {provider.name!r} is unhealthy at "
+            f"{provider.base_url}.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        models = provider.list_models()
+    except Exception as exc:
+        logger.exception("Failed to list models for %s", provider_name)
+        console.print(f"[red]Error listing models:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if not models:
+        console.print(f"[dim]No models reported by {provider_name}.[/dim]")
+        return
+
+    table = Table(title=f"Models ({provider_name})")
+    table.add_column("Model ID")
+    for model_id in models:
+        table.add_row(model_id)
 
     console.print(table)
 
@@ -194,7 +239,7 @@ def prompt(
     if not provider.health_check():
         console.print(
             f"[red]Provider {provider.name!r} is unhealthy at {provider.base_url}. "
-            "Check ELENCHOS_OLLAMA_BASE_URL or ~/.elenchos/config.yaml.[/red]"
+            "Check ELENCHOS_*_BASE_URL or ~/.elenchos/config.yaml.[/red]"
         )
         raise typer.Exit(code=1)
 

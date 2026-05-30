@@ -1,8 +1,12 @@
+import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -38,6 +42,26 @@ class ElenchosSettings(BaseSettings):
     request_timeout_s: float = 300.0
     ollama_base_url: str | None = None
     ollama_api_key: str | None = None
+    lmstudio_base_url: str | None = None
+    lmstudio_api_key: str | None = None
+    openrouter_base_url: str | None = None
+    openrouter_api_key: str | None = None
+
+
+@dataclass(frozen=True)
+class ProviderDefaults:
+    base_url: str
+    api_key_env: str | None = None
+
+
+BUILTIN_PROVIDERS: dict[str, ProviderDefaults] = {
+    "ollama": ProviderDefaults(base_url="http://localhost:11434"),
+    "lmstudio": ProviderDefaults(base_url="http://localhost:1234/v1"),
+    "openrouter": ProviderDefaults(
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -65,21 +89,79 @@ def load_yaml_config(settings: ElenchosSettings | None = None) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def list_configured_provider_names(
+    settings: ElenchosSettings | None = None,
+) -> list[str]:
+    """Return built-in plus user-defined provider names from config.yaml."""
+    settings = settings or ElenchosSettings()
+    yaml_config = load_yaml_config(settings)
+    yaml_providers = (yaml_config.get("providers") or {}).keys()
+    names = set(BUILTIN_PROVIDERS.keys()) | set(yaml_providers)
+    return sorted(names)
+
+
+def _provider_yaml(name: str, yaml_config: dict) -> dict:
+    providers = yaml_config.get("providers") or {}
+    provider_yaml = providers.get(name) or {}
+    return provider_yaml if isinstance(provider_yaml, dict) else {}
+
+
+def _resolve_api_key(
+    name: str,
+    *,
+    provider_yaml: dict,
+    defaults: ProviderDefaults | None,
+    settings: ElenchosSettings,
+    cli_api_key: str | None = None,
+) -> str | None:
+    """Resolve API key: CLI > ELENCHOS_{NAME}_API_KEY > api_key_env."""
+    if provider_yaml.get("api_key"):
+        logger.warning(
+            "Ignoring providers.%s.api_key in config.yaml; set api_key_env "
+            "(or ELENCHOS_%s_API_KEY) instead.",
+            name,
+            name.upper(),
+        )
+
+    if cli_api_key:
+        return cli_api_key
+
+    env_api_key = getattr(settings, f"{name}_api_key", None)
+    if env_api_key:
+        return str(env_api_key)
+
+    api_key_env = provider_yaml.get("api_key_env") or (
+        defaults.api_key_env if defaults else None
+    )
+    if api_key_env:
+        return os.environ.get(str(api_key_env))
+
+    return None
+
+
 def resolve_provider_endpoint(
     name: str,
     *,
     settings: ElenchosSettings | None = None,
     default_base_url: str | None = None,
+    cli_base_url: str | None = None,
+    cli_api_key: str | None = None,
 ) -> ProviderEndpoint:
-    """Resolve provider endpoint: env > config.yaml > default."""
+    """Resolve provider endpoint: CLI > env > config.yaml > defaults."""
     settings = settings or ElenchosSettings()
     yaml_config = load_yaml_config(settings)
-    provider_yaml = (yaml_config.get("providers") or {}).get(name) or {}
+    provider_yaml = _provider_yaml(name, yaml_config)
+    defaults = BUILTIN_PROVIDERS.get(name)
 
     env_base_url = getattr(settings, f"{name}_base_url", None)
-    env_api_key = getattr(settings, f"{name}_api_key", None)
 
-    base_url = env_base_url or provider_yaml.get("base_url") or default_base_url
+    base_url = (
+        cli_base_url
+        or env_base_url
+        or provider_yaml.get("base_url")
+        or default_base_url
+        or (defaults.base_url if defaults else None)
+    )
     if not base_url:
         raise ValueError(
             f"No base URL configured for provider {name!r}. "
@@ -87,9 +169,15 @@ def resolve_provider_endpoint(
             f"{settings.data_dir / 'config.yaml'} providers.{name}.base_url"
         )
 
-    api_key = env_api_key or provider_yaml.get("api_key")
+    api_key = _resolve_api_key(
+        name,
+        provider_yaml=provider_yaml,
+        defaults=defaults,
+        settings=settings,
+        cli_api_key=cli_api_key,
+    )
 
     return ProviderEndpoint(
         base_url=normalize_openai_base_url(str(base_url)),
-        api_key=str(api_key) if api_key else None,
+        api_key=api_key,
     )
