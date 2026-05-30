@@ -12,6 +12,9 @@ export function SuiteTaskPanel({ task }: SuiteTaskPanelProps) {
         <span className="task-panel__id">{task.id}</span>
         <span className="task-panel__type">{task.type}</span>
       </header>
+      {task.description ? (
+        <p className="task-panel__description">{task.description}</p>
+      ) : null}
       <pre className="task-panel__prompt">{task.prompt}</pre>
       <div className="task-panel__scorers">
         {task.scorers.map((scorer) => (

@@ -44,6 +44,7 @@ class SuiteDefaultsResponse(BaseModel):
 
 class TaskResponse(BaseModel):
     id: str
+    description: str = ""
     type: str
     prompt: str
     scorers: list[str]
@@ -252,6 +253,7 @@ def suite_detail_from_domain(suite: BenchmarkSuite) -> SuiteDetailResponse:
     tasks = [
         TaskResponse(
             id=task.id,
+            description=task.description,
             type=suite.effective_task_type(task),
             prompt=task.prompt,
             scorers=[scorer.type for scorer in suite.effective_scoring(task)],

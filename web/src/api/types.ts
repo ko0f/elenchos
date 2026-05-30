@@ -26,6 +26,7 @@ export interface SuiteDefaults {
 
 export interface Task {
   id: string;
+  description: string;
   type: string;
   prompt: string;
   scorers: string[];

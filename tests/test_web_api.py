@@ -90,6 +90,8 @@ def test_get_coding_benchmark_requires_code_exec(api_client):
     assert payload["requires_code_exec"] is True
     assert payload["requires_judge"] is False
     assert payload["tasks"][0]["scorers"] == ["unit_test"]
+    assert "description" in payload["tasks"][0]
+    assert payload["tasks"][0]["description"]
 
 
 def test_get_text_benchmark_no_code_exec(api_client):
@@ -99,6 +101,9 @@ def test_get_text_benchmark_no_code_exec(api_client):
     payload = response.json()
     assert payload["requires_code_exec"] is False
     assert payload["requires_judge"] is False
+    knights = next(t for t in payload["tasks"] if t["id"] == "knights_knaves")
+    assert knights["description"]
+    assert "ANSWER" in knights["description"] or "knight" in knights["description"]
 
 
 def test_get_benchmark_requires_judge(api_client):

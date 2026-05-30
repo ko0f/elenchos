@@ -13,6 +13,11 @@ defaults:
     max_tokens: 2048
 tasks:
   - id: knights_knaves
+    description: >-
+      Tests: deductive logic under contradiction — the model must try both
+      type assignments and reject the inconsistent one. Success: ANSWER line
+      contains exactly "knight" (A is a knight; B's self-referential claim
+      is the lie that reveals B as a knave).
     prompt: |
       On an island, knights always tell the truth and knaves always lie.
       Every inhabitant is exactly one of the two. You meet two inhabitants, A
@@ -28,6 +33,12 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*knight\b'
 
   - id: pipes_rate
+    description: >-
+      Tests: rate addition (fill/drain rates as fractions of tank/hour) and
+      unit conversion to minutes. Net rate = 1/6 + 1/4 - 1/12 = 2/12 + 3/12 -
+      1/12 = 4/12 = 1/3 tank/hr → 3 hours = 180 minutes. Success: ANSWER line
+      contains exactly "180". Common trap: adding rates incorrectly or omitting
+      the drain.
     prompt: |
       A tank is empty. Inlet pipe A alone fills it in 6 hours. Inlet pipe B
       alone fills it in 4 hours. A drain alone empties a full tank in 12 hours.
@@ -42,6 +53,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*180\b'
 
   - id: dice_increasing
+    description: >-
+      Tests: combinatorics — counting strictly increasing triples from {1..6}
+      then dividing by 6³=216. C(6,3)=20 favorable outcomes → 20/216 = 5/54.
+      Success: ANSWER line contains exactly "5/54". Tests fraction reduction
+      and correct enumeration.
     prompt: |
       A standard fair 6-sided die is rolled three times in order. What is the
       probability that the three results are strictly increasing (each roll
@@ -55,6 +71,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*5/54(?![\d/])'
 
   - id: race_order
+    description: >-
+      Tests: constraint-satisfaction reasoning over orderings. Clues force
+      S<Q<R (position order) and S≠1st, so S,Q,R occupy positions 2,3,4 leaving
+      P=1st (which also satisfies P≠last). Unique solution: P,S,Q,R. 3rd = Q.
+      Success: ANSWER line contains exactly "Q".
     prompt: |
       Four runners P, Q, R, S finish a race in positions 1st through 4th with
       no ties. You know:
@@ -70,6 +91,12 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*Q\b'
 
   - id: syllogism_validity
+    description: >-
+      Tests: formal syllogistic validity — the model must resist the intuitive
+      but logically unwarranted conclusion. "Some thinkers are not writers" says
+      nothing about the philosopher subset of thinkers; philosophers could all
+      be writers. Answer is "no". Success: ANSWER line contains exactly "no".
+      Common failure: affirming the conclusion despite invalidity.
     prompt: |
       Consider these two premises:
         (1) All philosophers are thinkers.
@@ -85,6 +112,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*no\b'
 
   - id: look_and_say
+    description: >-
+      Tests: sequence induction — the model must correctly decode the look-and-say
+      rule and apply it to "111221": one 3, one 1, two 2s, two 1s → 312211.
+      Success: ANSWER line contains exactly "312211". Tests careful
+      digit-grouping under a non-obvious generative rule.
     prompt: |
       Each term of this sequence describes the previous term by reading off its
       digits aloud (run-length "look-and-say"):
@@ -98,6 +130,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*312211\b'
 
   - id: collatz_steps
+    description: >-
+      Tests: step-by-step simulation of the Collatz sequence from 7.
+      Sequence: 7→22→11→34→17→52→26→13→40→20→10→5→16→8→4→2→1 (16 steps).
+      Success: ANSWER line contains exactly "16". Tests careful counting under
+      a simple iterative rule; off-by-one errors common.
     prompt: |
       Start with the number 7. Repeat this rule: if the current number is even,
       divide it by 2; if it is odd, multiply by 3 and add 1. Stop as soon as
@@ -112,6 +149,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*16\b'
 
   - id: height_ordering
+    description: >-
+      Tests: transitive ordering across a partially ordered set. Full chain:
+      Tom > Jim > Pat > Sam > Ed. Second tallest = Jim. Success: ANSWER line
+      contains exactly "Jim". Requires correctly integrating the Ed<Pat<Jim
+      chain with the Tom>Jim>Sam>Ed chain.
     prompt: |
       From these facts:
         - Tom is taller than Jim.
@@ -127,6 +169,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*Jim\b'
 
   - id: modular_power
+    description: >-
+      Tests: modular exponentiation via Fermat's little theorem or repeated
+      squaring. ord₁₃(7)=12; 100 mod 12=4; 7⁴=2401; 2401 mod 13=9. Success:
+      ANSWER line contains exactly "9". Tests number-theory reasoning without
+      approximation.
     prompt: |
       Compute the remainder when 7^100 is divided by 13. Do not approximate;
       use modular arithmetic.
@@ -138,6 +185,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*9\b'
 
   - id: bat_and_ball
+    description: >-
+      Tests: resistance to the cognitive-reflection "System 1" trap. Intuitive
+      wrong answer is 10¢; correct algebra gives ball=5¢, bat=$1.05. Success:
+      ANSWER line contains exactly "5". A classic CRT item — weak models
+      answer 10.
     prompt: |
       A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the
       ball. How much does the ball cost, in cents?
@@ -149,6 +201,11 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*5\b'
 
   - id: inclusion_exclusion
+    description: >-
+      Tests: inclusion-exclusion counting with an explicit exclusion clause.
+      ⌊100/3⌋=33 multiples of 3, ⌊100/5⌋=20 of 5, ⌊100/15⌋=6 of both;
+      (33-6)+(20-6)=27+14=41. Success: ANSWER line contains exactly "41".
+      Common mistake: forgetting to exclude multiples of 15 or double-counting.
     prompt: |
       How many integers from 1 to 100 inclusive are divisible by 3 or by 5 but
       NOT by both (i.e., exclude any number divisible by 15)?
@@ -160,6 +217,10 @@ tasks:
         pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*41\b'
 
   - id: time_arithmetic
+    description: >-
+      Tests: clock arithmetic with AM/PM boundary crossing. 9:50 AM + 145 min =
+      9:50 + 2h25m = 12:15 PM. Success: ANSWER line contains exactly "12:15 PM".
+      Tests correct handling of the noon boundary and 12-hour format.
     prompt: |
       A meeting starts at 9:50 AM and lasts 145 minutes. At what clock time does
       it end? Use 12-hour format like "1:15 PM".

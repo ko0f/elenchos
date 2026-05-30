@@ -13,12 +13,14 @@ const suiteDetail = {
   tasks: [
     {
       id: "arithmetic",
+      description: "Tests basic addition. Success: answer is 4.",
       type: "text",
       prompt: "What is 2+2?",
       scorers: ["exact_match"],
     },
     {
       id: "capital",
+      description: "",
       type: "text",
       prompt: "Capital of France?",
       scorers: ["contains_all"],
@@ -63,5 +65,6 @@ describe("BenchmarkDetailPage", () => {
     expect(screen.getByText("contains_all")).toBeInTheDocument();
     expect(screen.getByText("arithmetic")).toBeInTheDocument();
     expect(screen.getByText("capital")).toBeInTheDocument();
+    expect(screen.getByText("Tests basic addition. Success: answer is 4.")).toBeInTheDocument();
   });
 });

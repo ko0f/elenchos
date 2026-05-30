@@ -1,5 +1,4 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { ProviderHealth } from "./ProviderHealth";
 import "./Layout.css";
 
 export function Layout() {
@@ -52,7 +51,6 @@ export function Layout() {
             Leaderboard
           </NavLink>
         </nav>
-        <ProviderHealth />
       </header>
       <main className="layout__main">
         <Outlet />

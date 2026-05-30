@@ -26,6 +26,14 @@
   color: var(--muted);
 }
 
+.task-panel__description {
+  margin: 0;
+  padding: 0.75rem 1rem 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 .task-panel__prompt {
   margin: 0;
   padding: 1rem;

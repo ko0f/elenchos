@@ -86,6 +86,7 @@ class Task(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(min_length=1)
+    description: str = ""
     prompt: str = Field(min_length=1)
     type: Literal["text", "coding"] | None = None
     scoring: list[ScorerConfig] = Field(default_factory=list)

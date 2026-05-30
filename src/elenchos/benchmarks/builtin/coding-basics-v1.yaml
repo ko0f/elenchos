@@ -10,6 +10,10 @@ defaults:
     max_tokens: 2048
 tasks:
   - id: lru_cache
+    description: >-
+      Tests: O(1) LRU cache design using a doubly-linked list + hash map (or
+      OrderedDict). Success: all five assertions pass — correct eviction order,
+      correct get/put semantics, capacity enforcement.
     prompt: |
       Implement a class `LRUCache` with O(1) `get` and `put`:
 
@@ -38,6 +42,9 @@ tasks:
           assert c.get(4) == 4
 
   - id: dijkstra
+    description: >-
+      Tests: Dijkstra's algorithm on a weighted directed graph. Success: correct
+      shortest-path weights, zero for same start/end, -1 for unreachable nodes.
     prompt: |
       Write `shortest_path(graph, start, end)` returning the minimum total
       weight of a path from `start` to `end` in a weighted directed graph.
@@ -56,6 +63,10 @@ tasks:
           assert shortest_path(g, "d", "a") == -1
 
   - id: expr_eval
+    description: >-
+      Tests: recursive-descent or shunting-yard expression parser — operator
+      precedence, parentheses, real division, whitespace tolerance, no eval/exec.
+      Success: all five numeric assertions pass.
     prompt: |
       Write `evaluate(expr)` that evaluates an arithmetic expression string and
       returns its numeric value. Support `+ - * /` with standard precedence,
@@ -73,6 +84,10 @@ tasks:
           assert evaluate("  100  ") == 100
 
   - id: edit_distance
+    description: >-
+      Tests: classic DP Levenshtein distance (insert/delete/substitute).
+      Success: correct distances for all four string pairs including empty-string
+      and identical-string edge cases.
     prompt: |
       Write `edit_distance(a, b)` returning the Levenshtein edit distance
       between strings `a` and `b`: the minimum number of single-character
@@ -89,6 +104,10 @@ tasks:
           assert edit_distance("flaw", "lawn") == 2
 
   - id: topo_sort
+    description: >-
+      Tests: Kahn's algorithm (or DFS) with lexicographic tie-breaking; cycle
+      detection. Success: correct lex-smallest ordering for a DAG, [] for a
+      cyclic graph, correct ordering when nodes have no shared prefix.
     prompt: |
       Write `topo_sort(graph)` returning the lexicographically smallest valid
       topological ordering of a directed graph as a list. `graph` maps each
@@ -106,6 +125,10 @@ tasks:
           assert topo_sort({"x": [], "y": [], "z": ["x", "y"]}) == ["z", "x", "y"]
 
   - id: merge_intervals
+    description: >-
+      Tests: sort-and-sweep interval merging including touching endpoints and
+      contained intervals. Success: all four cases return the correct minimal
+      merged list, including empty-input handling.
     prompt: |
       Write `merge_intervals(intervals)` that takes a list of `[start, end]`
       integer intervals (in any order, possibly overlapping or touching) and
@@ -123,6 +146,10 @@ tasks:
           assert merge_intervals([[1, 4], [2, 3]]) == [[1, 4]]
 
   - id: min_window
+    description: >-
+      Tests: sliding-window minimum substring containing all characters of t
+      with duplicate counts. Success: correct substring (or "") for all four
+      cases including impossible and leftmost-tie scenarios.
     prompt: |
       Write `min_window(s, t)` returning the shortest contiguous substring of
       `s` that contains every character of `t` including duplicates (counts
@@ -140,6 +167,10 @@ tasks:
           assert min_window("aab", "ab") == "ab"
 
   - id: coin_change
+    description: >-
+      Tests: unbounded knapsack DP for minimum coin count. Success: optimal
+      count for standard and hard (large-denomination) cases, 0 for amount=0,
+      -1 when no solution exists.
     prompt: |
       Write `coin_change(coins, amount)` returning the minimum number of coins
       whose values sum exactly to `amount`. Each coin denomination may be used
