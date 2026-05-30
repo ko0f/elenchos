@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { RunDetailPage } from "./RunDetailPage";
 
 const finishedRunDetail = {
@@ -63,6 +63,17 @@ const getBenchmark = vi.hoisted(() =>
   })),
 );
 
+vi.mock("../hooks/useJobStream", () => ({
+  useJobStream: vi.fn((jobId: string | null) => ({
+    events: [],
+    status: jobId ? "streaming" : "done",
+    runId: null,
+    comparisonId: null,
+    summary: null,
+    error: null,
+  })),
+}));
+
 vi.mock("../api/client", () => ({
   api: {
     getRun,
@@ -95,6 +106,10 @@ function renderPage(path = "/runs/run-abc") {
 }
 
 describe("RunDetailPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders results and lazy-loads output on expand", async () => {
     getRun.mockResolvedValue(finishedRunDetail);
     const user = userEvent.setup();
@@ -115,7 +130,7 @@ describe("RunDetailPage", () => {
 
   it("shows live status and progress for an in-progress run", async () => {
     getRun.mockResolvedValue(liveRunDetail);
-    getRunJob.mockResolvedValue(null);
+    getRunJob.mockResolvedValue({ job_id: "job-live" });
     renderPage("/runs/run-live");
 
     expect(await screen.findByRole("heading", { name: "run-live" })).toBeInTheDocument();
@@ -124,4 +139,21 @@ describe("RunDetailPage", () => {
     expect(getRunJob).toHaveBeenCalled();
     expect(getBenchmark).toHaveBeenCalled();
   });
+
+  it("stops polling and shows interrupted when no active job exists", async () => {
+    getRun.mockResolvedValue({
+      ...liveRunDetail,
+      results: [],
+    });
+    getRunJob.mockResolvedValue(null);
+    renderPage("/runs/run-live");
+
+    expect(await screen.findByRole("heading", { name: "run-live" })).toBeInTheDocument();
+    expect(await screen.findByText("Interrupted", {}, { timeout: 8000 })).toBeInTheDocument();
+
+    const callsAfterStop = getRunJob.mock.calls.length;
+    expect(callsAfterStop).toBeGreaterThanOrEqual(3);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(getRunJob.mock.calls.length).toBe(callsAfterStop);
+  }, 15_000);
 });

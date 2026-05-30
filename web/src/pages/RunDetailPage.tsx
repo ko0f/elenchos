@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
@@ -12,6 +12,7 @@ import { ScoreBadge } from "../components/ScoreBadge";
 import "../components/RunProgress.css";
 
 const LIVE_POLL_MS = 2000;
+const MAX_JOB_LOOKUP_POLLS = 3;
 
 function metricValue(summary: Record<string, unknown> | null | undefined, key: string): string {
   const value = summary?.[key];
@@ -30,24 +31,54 @@ function metricValue(summary: Record<string, unknown> | null | undefined, key: s
 export function RunDetailPage() {
   const { runId = "" } = useParams();
   const queryClient = useQueryClient();
+  const [jobLookupCount, setJobLookupCount] = useState(0);
+  const shouldPollLiveRef = useRef(true);
+
+  useEffect(() => {
+    setJobLookupCount(0);
+    shouldPollLiveRef.current = true;
+  }, [runId]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.run(runId),
     queryFn: () => api.getRun(runId),
     enabled: Boolean(runId),
-    refetchInterval: (query) =>
-      query.state.data?.run.finished_at ? false : LIVE_POLL_MS,
+    refetchInterval: (query) => {
+      if (query.state.data?.run.finished_at || !shouldPollLiveRef.current) {
+        return false;
+      }
+      return LIVE_POLL_MS;
+    },
   });
 
   const isLive = Boolean(data && !data.run.finished_at);
 
   const { data: runJob } = useQuery({
     queryKey: queryKeys.runJob(runId),
-    queryFn: () => api.getRunJob(runId),
-    enabled: isLive,
+    queryFn: async () => {
+      const job = await api.getRunJob(runId);
+      if (job == null) {
+        setJobLookupCount((count) => count + 1);
+      }
+      return job;
+    },
+    enabled: isLive && jobLookupCount < MAX_JOB_LOOKUP_POLLS,
     retry: false,
-    refetchInterval: isLive ? LIVE_POLL_MS : false,
+    refetchInterval: (query) => {
+      if (!isLive || query.state.data?.job_id) {
+        return false;
+      }
+      return jobLookupCount < MAX_JOB_LOOKUP_POLLS ? LIVE_POLL_MS : false;
+    },
   });
+
+  const jobLookupExhausted =
+    isLive && runJob == null && jobLookupCount >= MAX_JOB_LOOKUP_POLLS;
+  const shouldPollLive = isLive && (Boolean(runJob?.job_id) || !jobLookupExhausted);
+  const shouldPollJob = shouldPollLive && !runJob?.job_id;
+  const isOrphaned = jobLookupExhausted;
+
+  shouldPollLiveRef.current = shouldPollLive;
 
   const { events, status: streamStatus } = useJobStream(runJob?.job_id ?? null);
 
@@ -55,7 +86,7 @@ export function RunDetailPage() {
   const { data: benchmark } = useQuery({
     queryKey: queryKeys.benchmark(benchmarkId ?? ""),
     queryFn: () => api.getBenchmark(benchmarkId!),
-    enabled: isLive && Boolean(benchmarkId),
+    enabled: shouldPollLive && Boolean(benchmarkId),
   });
 
   useEffect(() => {
@@ -96,10 +127,9 @@ export function RunDetailPage() {
   const summary =
     run.summary ??
     (results.length > 0 ? aggregateResultsSummary(results) : null);
-  const statusLabel = jobStatusLabel(
-    runJob ? streamStatus : null,
-    isLive && !runJob,
-  );
+  const statusLabel = isOrphaned
+    ? "Interrupted"
+    : jobStatusLabel(runJob ? streamStatus : null, shouldPollJob);
 
   return (
     <>
@@ -109,8 +139,16 @@ export function RunDetailPage() {
         </p>
         <div className="page-header__title-row">
           <h1>{run.run_id}</h1>
-          {isLive && statusLabel && (
-            <span className="run-progress__status page-header__live">{statusLabel}</span>
+          {statusLabel && (
+            <span
+              className={
+                isOrphaned
+                  ? "run-progress__status page-header__live page-header__live--orphaned"
+                  : "run-progress__status page-header__live"
+              }
+            >
+              {statusLabel}
+            </span>
           )}
         </div>
         <p className="page-header__subtitle">
@@ -119,7 +157,7 @@ export function RunDetailPage() {
         </p>
       </header>
 
-      {isLive && totalTasks != null && (
+      {shouldPollLive && totalTasks != null && (
         <div className="run-live-progress">
           <div className="run-progress__bar-wrap">
             <div className="run-progress__bar" style={{ width: `${progressPct}%` }} />

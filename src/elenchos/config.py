@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     results_dir: str = "results"
     request_timeout_s: float = 300.0
     temperature: float = 0.0
-    max_tokens: int = 1024
+    max_tokens: int = 131_072
 
 
 class ElenchosSettings(BaseSettings):

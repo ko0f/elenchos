@@ -10,7 +10,7 @@ description: >-
 defaults:
   params:
     temperature: 0.0
-    max_tokens: 8192
+    max_tokens: 131072
 tasks:
   - id: knights_knaves
     description: >-

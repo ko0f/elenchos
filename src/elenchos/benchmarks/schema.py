@@ -11,11 +11,15 @@ class SuiteValidationError(ValueError):
     """Benchmark YAML failed schema validation."""
 
 
+# Default completion budget for runs (reasoning models can use most of this).
+DEFAULT_MAX_TOKENS = 131_072
+
+
 class GenerationParamsDefaults(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(default=1024, ge=1)
+    max_tokens: int | None = Field(default=DEFAULT_MAX_TOKENS, ge=1)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     seed: int | None = None
     stop: list[str] | None = None

@@ -46,7 +46,9 @@ def build_messages(
 
 
 def default_generation_params() -> GenerationParams:
-    return GenerationParams(temperature=0.0, max_tokens=1024)
+    from elenchos.benchmarks.schema import DEFAULT_MAX_TOKENS
+
+    return GenerationParams(temperature=0.0, max_tokens=DEFAULT_MAX_TOKENS)
 
 
 def generation_params_to_dict(params: GenerationParams) -> dict:

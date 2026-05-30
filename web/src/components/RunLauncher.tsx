@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import type { SuiteDetail } from "../api/types";
+import { DEFAULT_MAX_TOKENS } from "../lib/defaults";
 import { ProviderModelSelect, qualifiedModel } from "./ProviderModelSelect";
 import "./RunLauncher.css";
 
@@ -15,7 +16,9 @@ export function RunLauncher({ suite, onLaunch }: RunLauncherProps) {
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
   const [temperature, setTemperature] = useState(String(defaults?.temperature ?? 0));
-  const [maxTokens, setMaxTokens] = useState(String(defaults?.max_tokens ?? 1024));
+  const [maxTokens, setMaxTokens] = useState(
+    String(defaults?.max_tokens ?? DEFAULT_MAX_TOKENS),
+  );
   const [concurrency, setConcurrency] = useState("1");
   const [allowCodeExec, setAllowCodeExec] = useState(false);
   const [judge, setJudge] = useState("");
