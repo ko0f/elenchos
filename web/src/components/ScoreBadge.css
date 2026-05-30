@@ -1,0 +1,29 @@
+.score-badge {
+  display: inline-block;
+  min-width: 3rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: center;
+}
+
+.score-badge--pass {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.score-badge--partial {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.score-badge--fail {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.score-badge--none {
+  background: #f3f4f6;
+  color: #6b7280;
+}

@@ -390,6 +390,45 @@ def test_run_suite_concurrency(tmp_path: Path, monkeypatch):
     assert all(result.score == 1.0 for result in outcome.results)
 
 
+def test_run_suite_on_event_emits_lifecycle(
+    tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+
+    provider = MockProvider(
+        responses={
+            "What is 1+1? Reply with the number only.": "2",
+            "Name the capital of Italy in one word.": "Rome",
+        }
+    )
+    events: list[tuple[str, dict]] = []
+
+    def on_event(event: str, data: dict) -> None:
+        events.append((event, data))
+
+    outcome = run_suite(
+        tiny_suite,
+        "mock/mock-model",
+        provider=provider,
+        show_progress=False,
+        on_event=on_event,
+    )
+
+    assert [event for event, _data in events] == [
+        "run_started",
+        "task_done",
+        "task_done",
+        "run_finished",
+    ]
+    assert events[0][1]["run_id"] == outcome.run.run_id
+    assert events[1][1]["task_id"] == "math"
+    assert events[1][1]["index"] == 1
+    assert events[1][1]["total"] == 2
+    assert events[1][1]["score"] == 1.0
+    assert events[2][1]["task_id"] == "city"
+    assert events[3][1]["summary"] == outcome.summary
+
+
 def test_is_transient_error():
     response = httpx.Response(503, request=httpx.Request("POST", "http://test"))
     assert is_transient_error(

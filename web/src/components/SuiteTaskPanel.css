@@ -1,0 +1,64 @@
+.task-panel {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.task-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.task-panel__id {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.task-panel__type {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.task-panel__prompt {
+  margin: 0;
+  padding: 1rem;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.task-panel__scorers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0 1rem 1rem;
+}
+
+.scorer-chip {
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-family: var(--mono);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.scorer-chip--unit_test {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.scorer-chip--judge_rubric {
+  background: #fae8ff;
+  color: #86198f;
+}

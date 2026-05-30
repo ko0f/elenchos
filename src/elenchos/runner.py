@@ -8,9 +8,11 @@ import logging
 import random
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -43,6 +45,8 @@ from elenchos.storage import (
 )
 
 logger = logging.getLogger(__name__)
+
+RunEventCallback = Callable[[str, dict[str, Any]], None]
 
 TEXT_SCORERS = frozenset(
     {"exact_match", "regex_match", "contains_all", "judge_rubric", "metrics"}
@@ -279,6 +283,22 @@ def _persist_result(run_dir: Path, result: Result) -> Result:
     return result
 
 
+def _emit_event(
+    on_event: RunEventCallback | None,
+    event: str,
+    data: dict[str, Any],
+) -> None:
+    if on_event is not None:
+        on_event(event, data)
+
+
+def _task_absolute_index(suite: BenchmarkSuite, task_id: str) -> int:
+    for index, task in enumerate(suite.tasks, start=1):
+        if task.id == task_id:
+            return index
+    return 0
+
+
 def _print_task_outcome(label: str, result: Result) -> None:
     if result.error:
         console.print(f"[red]{label} error:[/red] {result.error}")
@@ -303,12 +323,14 @@ def _execute_tasks(
     concurrency: int,
     show_progress: bool,
     task_index_offset: int,
+    on_event: RunEventCallback | None = None,
 ) -> list[Result]:
     if not pending_tasks:
         return []
 
     write_lock = threading.Lock()
     new_results: list[Result] = []
+    total_tasks = len(suite.tasks)
 
     def run_one(task: Task) -> Result:
         return _run_task(
@@ -322,12 +344,26 @@ def _execute_tasks(
             max_retries=max_retries,
         )
 
-    def record(label: str, result: Result) -> None:
+    def record(label: str, result: Result, *, index: int | None = None) -> None:
         with write_lock:
             result = _persist_result(run_dir, result)
         new_results.append(result)
         if show_progress:
             _print_task_outcome(label, result)
+        task_index = index if index is not None else _task_absolute_index(
+            suite, result.task_id
+        )
+        _emit_event(
+            on_event,
+            "task_done",
+            {
+                "task_id": result.task_id,
+                "index": task_index,
+                "total": total_tasks,
+                "score": result.score,
+                "error": result.error,
+            },
+        )
 
     if concurrency <= 1:
         for index, task in enumerate(pending_tasks, start=1):
@@ -338,7 +374,7 @@ def _execute_tasks(
             )
             with status:
                 result = run_one(task)
-            record(label, result)
+            record(label, result, index=absolute_index)
         return new_results
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
@@ -380,6 +416,7 @@ def run_suite(
     judge_model: str | None = None,
     concurrency: int | None = None,
     max_retries: int | None = None,
+    on_event: RunEventCallback | None = None,
 ) -> SuiteRunOutcome:
     """Run benchmark tasks with optional concurrency, resume, and retries."""
     settings = settings or ElenchosSettings()
@@ -458,6 +495,8 @@ def run_suite(
         existing_results = []
         completed_ids = set()
 
+    _emit_event(on_event, "run_started", {"run_id": run.run_id})
+
     pending_tasks = [task for task in suite.tasks if task.id not in completed_ids]
     task_index_offset = len(completed_ids)
 
@@ -474,12 +513,14 @@ def run_suite(
         concurrency=effective_concurrency,
         show_progress=show_progress,
         task_index_offset=task_index_offset,
+        on_event=on_event,
     )
 
     results = _order_results(suite, existing_results + new_results)
     summary = aggregate_run_summary(results)
     run.summary = summary
     finalize_run(run_dir, run)
+    _emit_event(on_event, "run_finished", {"summary": summary})
 
     return SuiteRunOutcome(
         run=run,

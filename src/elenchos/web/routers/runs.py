@@ -1,9 +1,35 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 
-from elenchos.storage import find_run, list_runs, load_results, read_output
+from elenchos.benchmarks import resolve_benchmark
+from elenchos.config import resolve_judge_config
+from elenchos.models import (
+    Result,
+    build_messages,
+    default_generation_params,
+    generation_params_to_dict,
+    parse_model_id,
+)
+from elenchos.providers.registry import get_provider
+from elenchos.runner import SuiteRunError, _validate_suite_for_run
+from elenchos.storage import (
+    DEFAULT_TASK_ID,
+    append_result,
+    create_run,
+    finalize_run,
+    find_run,
+    list_runs,
+    load_results,
+    read_output,
+    save_output,
+)
 from elenchos.web.deps import SettingsDep
+from elenchos.web.jobs import job_manager
 from elenchos.web.schemas import (
+    CreateRunRequest,
+    CreateRunResponse,
+    PromptRequest,
+    PromptResponse,
     RunDetailResponse,
     RunSummaryResponse,
     result_from_domain,
@@ -12,6 +38,110 @@ from elenchos.web.schemas import (
 )
 
 router = APIRouter(tags=["runs"])
+
+
+@router.post("/runs", response_model=CreateRunResponse, status_code=202)
+def create_run_endpoint(
+    request: CreateRunRequest,
+    settings: SettingsDep,
+) -> CreateRunResponse:
+    try:
+        suite = resolve_benchmark(request.benchmark)
+        judge_config = resolve_judge_config(
+            settings=settings,
+            cli_judge=request.judge,
+        )
+        effective_judge = judge_config.model or request.judge
+        _validate_suite_for_run(
+            suite,
+            allow_code_exec=request.allow_code_exec,
+            judge_model=effective_judge,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SuiteRunError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    job = job_manager.enqueue_run(
+        suite,
+        request.model,
+        settings=settings,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        allow_code_exec=request.allow_code_exec,
+        judge_model=request.judge,
+        concurrency=request.concurrency,
+    )
+    return CreateRunResponse(job_id=job.job_id, run_id=job.run_id)
+
+
+@router.post("/prompt", response_model=PromptResponse)
+def prompt_endpoint(
+    request: PromptRequest,
+    settings: SettingsDep,
+) -> PromptResponse:
+    try:
+        model_id = parse_model_id(request.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    provider = get_provider(model_id.provider, settings=settings)
+    if not provider.health_check():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Provider {provider.name!r} is unhealthy at {provider.base_url}."
+            ),
+        )
+
+    messages = build_messages(request.text)
+    params = default_generation_params()
+    run_dir, run = create_run(
+        model=model_id.qualified,
+        params=generation_params_to_dict(params),
+        settings=settings,
+    )
+
+    try:
+        completion = provider.complete(model_id.model, messages, params)
+    except Exception as exc:
+        result = Result(
+            task_id=DEFAULT_TASK_ID,
+            prompt=request.text,
+            latency_ms=0.0,
+            error=str(exc),
+        )
+        append_result(run_dir, result)
+        finalize_run(run_dir, run)
+        return PromptResponse(
+            run_id=run.run_id,
+            output=None,
+            latency_ms=0.0,
+            error=str(exc),
+        )
+
+    output_ref = save_output(run_dir, DEFAULT_TASK_ID, completion.text)
+    append_result(
+        run_dir,
+        Result(
+            task_id=DEFAULT_TASK_ID,
+            prompt=request.text,
+            latency_ms=completion.latency_ms,
+            prompt_tokens=completion.prompt_tokens,
+            completion_tokens=completion.completion_tokens,
+            output_ref=output_ref,
+            finish_reason=completion.finish_reason,
+        ),
+    )
+    finalize_run(run_dir, run)
+    return PromptResponse(
+        run_id=run.run_id,
+        output=completion.text,
+        latency_ms=completion.latency_ms,
+        prompt_tokens=completion.prompt_tokens,
+        completion_tokens=completion.completion_tokens,
+        finish_reason=completion.finish_reason,
+    )
 
 
 @router.get("/runs", response_model=list[RunSummaryResponse])

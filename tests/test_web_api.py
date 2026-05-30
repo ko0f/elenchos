@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from elenchos.config import ElenchosSettings
 from elenchos.models import BenchmarkRef, Result
+from elenchos.runner import SuiteRunOutcome
 from elenchos.storage import (
     append_result,
     create_run,
@@ -15,6 +17,7 @@ from elenchos.storage import (
 )
 from elenchos.web.app import create_app
 from elenchos.web.deps import get_settings
+from elenchos.web.jobs import job_manager
 
 
 @pytest.fixture
@@ -265,3 +268,122 @@ def test_list_models_returns_models(mock_names, mock_get_provider, api_client):
     response = client.get("/api/providers/ollama/models")
     assert response.status_code == 200
     assert response.json() == {"models": ["llama3.1:8b", "mistral:latest"]}
+
+
+def test_post_run_rejects_code_exec_without_flag(api_client):
+    client, _settings = api_client
+    response = client.post(
+        "/api/runs",
+        json={
+            "benchmark": "coding-basics-v1",
+            "model": "ollama/llama3.1:8b",
+        },
+    )
+    assert response.status_code == 400
+    assert "allow-code-exec" in response.json()["detail"].lower()
+
+
+@patch("elenchos.web.jobs.run_suite")
+def test_post_run_enqueues_job(mock_run_suite, api_client):
+    client, settings = api_client
+    run_dir, run = create_run(
+        model="ollama/llama3.1:8b",
+        params={"temperature": 0.0, "max_tokens": 1024},
+        benchmark=BenchmarkRef(id="text-reasoning-v1", version=1),
+        settings=settings,
+    )
+
+    def fake_run_suite(
+        suite,
+        model,
+        *,
+        settings=None,
+        on_event=None,
+        **kwargs,
+    ):
+        if on_event is not None:
+            on_event("run_started", {"run_id": run.run_id})
+            for index, task in enumerate(suite.tasks, start=1):
+                on_event(
+                    "task_done",
+                    {
+                        "task_id": task.id,
+                        "index": index,
+                        "total": len(suite.tasks),
+                        "score": 1.0,
+                        "error": None,
+                    },
+                )
+            summary = {"mean_score": 1.0, "pass_rate": 1.0, "task_count": 1}
+            on_event("run_finished", {"summary": summary})
+        return SuiteRunOutcome(
+            run=run,
+            run_dir=run_dir,
+            results=[],
+            summary={"mean_score": 1.0, "pass_rate": 1.0, "task_count": 1},
+        )
+
+    mock_run_suite.side_effect = fake_run_suite
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "benchmark": "text-reasoning-v1",
+            "model": "ollama/llama3.1:8b",
+        },
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert "job_id" in payload
+
+    job_id = payload["job_id"]
+    for _ in range(50):
+        job = job_manager.get(job_id)
+        if job is not None and job.status == "done":
+            break
+        time.sleep(0.05)
+
+    job = job_manager.get(job_id)
+    assert job is not None
+    assert job.status == "done"
+    assert job.run_id == run.run_id
+    assert job.progress[0].event == "run_started"
+    assert job.progress[-1].event == "run_finished"
+    assert all(item.event == "task_done" for item in job.progress[1:-1])
+    assert len(job.progress) >= 3
+
+    status_response = client.get(f"/api/jobs/{job_id}")
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "done"
+    assert status_response.json()["run_id"] == run.run_id
+
+
+@patch("elenchos.web.routers.runs.get_provider")
+def test_post_prompt_persists_run(mock_get_provider, api_client):
+    client, settings = api_client
+    provider = MagicMock()
+    provider.name = "ollama"
+    provider.base_url = "http://localhost:11434/v1"
+    provider.health_check.return_value = True
+    completion = MagicMock()
+    completion.text = "hello"
+    completion.latency_ms = 120.0
+    completion.prompt_tokens = 5
+    completion.completion_tokens = 2
+    completion.finish_reason = "stop"
+    provider.complete.return_value = completion
+    mock_get_provider.return_value = provider
+
+    response = client.post(
+        "/api/prompt",
+        json={"model": "ollama/llama3.1:8b", "text": "Say hello"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["output"] == "hello"
+    assert payload["latency_ms"] == 120.0
+
+    run_id = payload["run_id"]
+    detail = client.get(f"/api/runs/{run_id}")
+    assert detail.status_code == 200
+    assert detail.json()["results"][0]["output"] == "hello"

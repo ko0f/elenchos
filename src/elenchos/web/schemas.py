@@ -105,6 +105,51 @@ class RunDetailResponse(BaseModel):
     results: list[ResultResponse]
 
 
+class CreateRunRequest(BaseModel):
+    benchmark: str
+    model: str
+    temperature: float | None = None
+    max_tokens: int | None = None
+    concurrency: int | None = None
+    allow_code_exec: bool = False
+    judge: str | None = None
+
+
+class CreateRunResponse(BaseModel):
+    job_id: str
+    run_id: str | None = None
+
+
+class PromptRequest(BaseModel):
+    model: str
+    text: str
+
+
+class PromptResponse(BaseModel):
+    run_id: str
+    output: str | None = None
+    latency_ms: float
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    finish_reason: str | None = None
+    error: str | None = None
+
+
+class ProgressEventResponse(BaseModel):
+    event: str
+    data: dict
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    kind: str
+    status: str
+    run_id: str | None = None
+    progress: list[ProgressEventResponse]
+    result: dict | None = None
+    error: str | None = None
+
+
 def _suite_has_scorer(suite: BenchmarkSuite, scorer_type: str) -> bool:
     return any(
         scorer.type == scorer_type
@@ -193,3 +238,18 @@ def run_metadata_from_domain(run: Run) -> RunMetadataResponse:
 
 def result_from_domain(result: Result) -> ResultResponse:
     return ResultResponse.model_validate(result, from_attributes=True)
+
+
+def job_status_from_domain(job: object) -> JobStatusResponse:
+    return JobStatusResponse(
+        job_id=job.job_id,
+        kind=job.kind,
+        status=job.status,
+        run_id=job.run_id,
+        progress=[
+            ProgressEventResponse(event=item.event, data=item.data)
+            for item in job.progress
+        ],
+        result=job.result,
+        error=job.error,
+    )

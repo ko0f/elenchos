@@ -1,0 +1,75 @@
+.suite-card {
+  display: block;
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.suite-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
+}
+
+.suite-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+
+.suite-card__id {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.suite-card__meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.suite-card__description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.suite-card__footer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.125rem 0.45rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--chip-bg);
+  color: var(--chip-text);
+}
+
+.chip--source-builtin {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.chip--source-user {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.chip--type {
+  background: #f3f4f6;
+  color: #374151;
+}
