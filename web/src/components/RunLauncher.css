@@ -159,8 +159,31 @@
   font-size: 0.8125rem;
 }
 
+.page-header__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.page-header__identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.page-header__identity h1 {
+  margin: 0 0 0.35rem;
+}
+
+.page-header__top .page-header__actions {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
 .page-header__actions {
   margin-top: 0.75rem;
   display: flex;
+  justify-content: flex-end;
   gap: 0.5rem;
 }

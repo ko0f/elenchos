@@ -31,14 +31,26 @@ export function BenchmarkDetailPage() {
   return (
     <>
       <header className="page-header">
-        <p className="page-header__subtitle">
-          <Link to="/benchmarks">Benchmarks</Link> / {data.id}
-        </p>
-        <h1>{data.id}</h1>
-        <p className="page-header__subtitle">
-          v{data.version} · {data.type} · {data.tasks.length} task
-          {data.tasks.length === 1 ? "" : "s"}
-        </p>
+        <div className="page-header__top">
+          <div className="page-header__identity">
+            <p className="page-header__subtitle">
+              <Link to="/benchmarks">Benchmarks</Link> / {data.id}
+            </p>
+            <h1>{data.id}</h1>
+            <p className="page-header__subtitle">
+              v{data.version} · {data.type} · {data.tasks.length} task
+              {data.tasks.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="page-header__actions">
+            <Link
+              to={`/run?benchmark=${encodeURIComponent(data.id)}`}
+              className="btn btn--primary"
+            >
+              Run
+            </Link>
+          </div>
+        </div>
         <p className="page-header__subtitle">{data.description}</p>
         {(data.requires_code_exec || data.requires_judge) && (
           <div className="hint-badges">
@@ -50,11 +62,6 @@ export function BenchmarkDetailPage() {
             )}
           </div>
         )}
-        <div className="page-header__actions">
-          <Link to={`/run?benchmark=${encodeURIComponent(data.id)}`} className="btn btn--primary">
-            Run
-          </Link>
-        </div>
       </header>
 
       <div className="task-list">
