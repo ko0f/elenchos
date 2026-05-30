@@ -185,3 +185,254 @@ tasks:
           assert coin_change([2], 3) == -1
           assert coin_change([1], 0) == 0
           assert coin_change([186, 419, 83, 408], 6249) == 20
+
+  - id: longest_palindrome
+    description: >-
+      Tests: longest palindromic substring via expand-around-center (or DP).
+      Success: correct substring for odd/even centers, single char, and
+      empty-string edge case.
+    prompt: |
+      Write `longest_palindrome(s)` returning the longest contiguous substring
+      of `s` that is a palindrome. If several have the maximum length, any one
+      of them is acceptable only when uniquely determined by the tests below.
+      Return `""` for an empty string. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: longest_palindrome
+        tests: |
+          assert longest_palindrome("cbbd") == "bb"
+          assert longest_palindrome("a") == "a"
+          assert longest_palindrome("forgeeksskeegfor") == "geeksskeeg"
+          assert longest_palindrome("") == ""
+
+  - id: word_break
+    description: >-
+      Tests: DP word segmentation against a dictionary with overlapping words.
+      Success: correct boolean for segmentable/non-segmentable strings and the
+      empty-string base case.
+    prompt: |
+      Write `word_break(s, words)` returning `True` if `s` can be segmented into
+      a space-separated sequence of one or more words from the list `words`
+      (each word reusable any number of times), else `False`. The empty string
+      is segmentable. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: word_break
+        tests: |
+          assert word_break("leetcode", ["leet", "code"]) is True
+          assert word_break("applepenapple", ["apple", "pen"]) is True
+          assert word_break("catsandog", ["cats", "dog", "sand", "and", "cat"]) is False
+          assert word_break("", ["a"]) is True
+
+  - id: rotate_matrix
+    description: >-
+      Tests: rotate an n x n matrix 90 degrees clockwise. Success: correct
+      result for 2x2 and 3x3 matrices.
+    prompt: |
+      Write `rotate(matrix)` that takes a square `n x n` matrix (list of lists)
+      and returns a new matrix rotated 90 degrees clockwise. Respond with Python
+      code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: rotate
+        tests: |
+          assert rotate([[1, 2], [3, 4]]) == [[3, 1], [4, 2]]
+          assert rotate([[1, 2, 3], [4, 5, 6], [7, 8, 9]]) == [[7, 4, 1], [8, 5, 2], [9, 6, 3]]
+
+  - id: valid_parens
+    description: >-
+      Tests: stack-based matching of three bracket types including interleaving.
+      Success: correct boolean for balanced, mismatched, interleaved, and empty
+      inputs.
+    prompt: |
+      Write `valid_parens(s)` returning `True` if every bracket in `s` (`()`,
+      `[]`, `{}`) is correctly opened and closed in the right order, else
+      `False`. The empty string is valid. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: valid_parens
+        tests: |
+          assert valid_parens("()[]{}") is True
+          assert valid_parens("(]") is False
+          assert valid_parens("([)]") is False
+          assert valid_parens("{[]}") is True
+          assert valid_parens("") is True
+
+  - id: kth_largest
+    description: >-
+      Tests: kth largest element by value (duplicates counted). Success: correct
+      element for distinct, duplicate-heavy, and single-element inputs.
+    prompt: |
+      Write `kth_largest(nums, k)` returning the kth largest element in `nums`
+      counting duplicates by position in sorted order (k is 1-based, so k=1 is
+      the maximum). Assume `1 <= k <= len(nums)`. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: kth_largest
+        tests: |
+          assert kth_largest([3, 2, 1, 5, 6, 4], 2) == 5
+          assert kth_largest([3, 2, 3, 1, 2, 4, 5, 5, 6], 4) == 4
+          assert kth_largest([1], 1) == 1
+
+  - id: spiral_order
+    description: >-
+      Tests: spiral traversal of a rectangular matrix. Success: correct order
+      for square and non-square matrices.
+    prompt: |
+      Write `spiral(matrix)` returning a flat list of the elements of `matrix`
+      (a list of equal-length rows) in clockwise spiral order starting from the
+      top-left. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: spiral
+        tests: |
+          assert spiral([[1, 2, 3], [4, 5, 6], [7, 8, 9]]) == [1, 2, 3, 6, 9, 8, 7, 4, 5]
+          assert spiral([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]) == [1, 2, 3, 4, 8, 12, 11, 10, 9, 5, 6, 7]
+
+  - id: product_except_self
+    description: >-
+      Tests: product of all elements except self without division, handling
+      zeros. Success: correct output for a clean list and a list containing a
+      zero.
+    prompt: |
+      Write `product_except_self(nums)` returning a list where each element `i`
+      is the product of all elements of `nums` except `nums[i]`. Do not use
+      division. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: product_except_self
+        tests: |
+          assert product_except_self([1, 2, 3, 4]) == [24, 12, 8, 6]
+          assert product_except_self([-1, 1, 0, -3, 3]) == [0, 0, 9, 0, 0]
+
+  - id: decode_string
+    description: >-
+      Tests: stack-based decoding of nested k[...] run-length strings. Success:
+      flat, nested, and mixed encodings all decode correctly.
+    prompt: |
+      Write `decode(s)` that decodes a string with the grammar `k[encoded]`,
+      meaning `encoded` repeated `k` times, where `k` is a positive integer and
+      encodings may be nested. Input contains only digits, brackets, and
+      lowercase letters and is always valid. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: decode
+        tests: |
+          assert decode("3[a]2[bc]") == "aaabcbc"
+          assert decode("3[a2[c]]") == "accaccacc"
+          assert decode("2[abc]3[cd]ef") == "abcabccdcdcdef"
+
+  - id: trap_rain
+    description: >-
+      Tests: trapping rain water via two-pointer (or DP) method. Success:
+      correct trapped volume for two classic profiles and the empty case.
+    prompt: |
+      Write `trap(height)` returning the total units of water that can be
+      trapped between the bars of an elevation map `height` (a list of
+      non-negative integers) after raining. Return `0` for an empty list.
+      Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: trap
+        tests: |
+          assert trap([0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]) == 6
+          assert trap([4, 2, 0, 3, 2, 5]) == 9
+          assert trap([]) == 0
+
+  - id: longest_consecutive
+    description: >-
+      Tests: longest run of consecutive integers in O(n) using a set. Success:
+      correct length for unordered input with duplicates and the empty case.
+    prompt: |
+      Write `longest_consec(nums)` returning the length of the longest sequence
+      of consecutive integers present in `nums` (order in the list does not
+      matter, duplicates are ignored). Return `0` for an empty list. Aim for
+      O(n) time. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: longest_consec
+        tests: |
+          assert longest_consec([100, 4, 200, 1, 3, 2]) == 4
+          assert longest_consec([0, 3, 7, 2, 5, 8, 4, 6, 0, 1]) == 9
+          assert longest_consec([]) == 0
+
+  - id: n_queens
+    description: >-
+      Tests: count distinct N-Queens solutions via backtracking with diagonal
+      pruning. Success: correct counts for n=1,2,4,8.
+    prompt: |
+      Write `n_queens(n)` returning the number of distinct ways to place `n`
+      queens on an `n x n` chessboard so that no two attack each other (no
+      shared row, column, or diagonal). Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: n_queens
+        tests: |
+          assert n_queens(1) == 1
+          assert n_queens(2) == 0
+          assert n_queens(4) == 2
+          assert n_queens(8) == 92
+
+  - id: unique_paths
+    description: >-
+      Tests: grid path counting via DP (or combinatorics). Success: correct
+      counts for rectangular grids and the 1x1 base case.
+    prompt: |
+      Write `unique_paths(m, n)` returning the number of distinct paths from the
+      top-left to the bottom-right corner of an `m x n` grid, moving only right
+      or down one cell at a time. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: unique_paths
+        tests: |
+          assert unique_paths(3, 7) == 28
+          assert unique_paths(3, 2) == 3
+          assert unique_paths(1, 1) == 1
+
+  - id: merge_k_sorted
+    description: >-
+      Tests: merge k sorted lists into one sorted list (heap or pairwise).
+      Success: correct merge plus empty-outer and empty-inner edge cases.
+    prompt: |
+      Write `merge_k(lists)` that takes a list of already-sorted integer lists
+      and returns a single sorted list containing all their elements. Handle an
+      empty outer list and empty inner lists. Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: merge_k
+        tests: |
+          assert merge_k([[1, 4, 5], [1, 3, 4], [2, 6]]) == [1, 1, 2, 3, 4, 4, 5, 6]
+          assert merge_k([]) == []
+          assert merge_k([[]]) == []
+
+  - id: group_anagrams
+    description: >-
+      Tests: grouping words into anagram classes with a canonical, fully-sorted
+      output to remove ordering ambiguity. Success: correct grouping plus empty
+      and single-word cases.
+    prompt: |
+      Write `group_anagrams(words)` that groups the strings in `words` into
+      anagram classes. Return a list of groups where each group is sorted
+      ascending, and the list of groups is itself sorted ascending (so the
+      output is fully deterministic). Respond with Python code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: group_anagrams
+        tests: |
+          assert group_anagrams(["eat", "tea", "tan", "ate", "nat", "bat"]) == [["ate", "eat", "tea"], ["bat"], ["nat", "tan"]]
+          assert group_anagrams([]) == []
+          assert group_anagrams(["a"]) == [["a"]]
