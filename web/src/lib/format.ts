@@ -38,6 +38,26 @@ export function formatDuration(ms: number | null | undefined): string {
   return `${minutes}m ${seconds}s`;
 }
 
+export function runDurationMs(
+  startedAt: string | null | undefined,
+  finishedAt?: string | null,
+  nowMs: number = Date.now(),
+): number | null {
+  if (!startedAt) {
+    return null;
+  }
+  const start = Date.parse(startedAt);
+  if (Number.isNaN(start)) {
+    return null;
+  }
+  const end = finishedAt ? Date.parse(finishedAt) : nowMs;
+  if (Number.isNaN(end)) {
+    return null;
+  }
+  const ms = end - start;
+  return ms >= 0 ? ms : null;
+}
+
 export function formatTokens(
   promptTokens: number | null | undefined,
   completionTokens: number | null | undefined,

@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import type { Provider } from "../api/types";
+import { FaIcon } from "./FaIcon";
 import "./ProviderModelSelect.css";
 
 interface ProviderModelSelectProps {
@@ -21,6 +22,7 @@ export function ProviderModelSelect({
   providers,
   disabled = false,
 }: ProviderModelSelectProps) {
+  const [sortByName, setSortByName] = useState(false);
   const healthyProviders = providers.filter((item) => item.healthy);
   const selectedProvider =
     provider && providers.some((item) => item.name === provider)
@@ -43,7 +45,10 @@ export function ProviderModelSelect({
     enabled: Boolean(selectedProvider),
   });
 
-  const models = modelsData?.models ?? [];
+  const rawModels = modelsData?.models ?? [];
+  const models = sortByName
+    ? [...rawModels].sort((a, b) => a.localeCompare(b))
+    : rawModels;
 
   return (
     <div className="provider-model-select">
@@ -76,22 +81,34 @@ export function ProviderModelSelect({
 
       <label className="form-field">
         <span className="form-field__label">Model</span>
-        <select
-          className="form-field__input"
-          aria-label="Model"
-          value={model}
-          disabled={disabled || !selectedProvider || modelsLoading}
-          onChange={(event) => onModelChange(event.target.value)}
-        >
-          <option value="">
-            {modelsLoading ? "Loading models…" : modelsError ? "Failed to load models" : "Select model"}
-          </option>
-          {models.map((item) => (
-            <option key={item} value={item}>
-              {item}
+        <div className="provider-model-select__model-row">
+          <select
+            className="form-field__input provider-model-select__model-input"
+            aria-label="Model"
+            value={model}
+            disabled={disabled || !selectedProvider || modelsLoading}
+            onChange={(event) => onModelChange(event.target.value)}
+          >
+            <option value="">
+              {modelsLoading ? "Loading models…" : modelsError ? "Failed to load models" : "Select model"}
             </option>
-          ))}
-        </select>
+            {models.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className={`btn btn--icon provider-model-select__sort${sortByName ? " provider-model-select__sort--active" : ""}`}
+            aria-label="Sort models by name"
+            aria-pressed={sortByName}
+            disabled={disabled || !selectedProvider || modelsLoading || models.length === 0}
+            onClick={() => setSortByName((value) => !value)}
+          >
+            <FaIcon icon="arrow-down-a-z" />
+          </button>
+        </div>
       </label>
     </div>
   );

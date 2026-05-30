@@ -139,6 +139,13 @@ describe("RunsPage", () => {
     expect(deleteRun).not.toHaveBeenCalled();
   });
 
+  it("renders run durations", async () => {
+    renderPage();
+
+    expect(await screen.findAllByText("30m 0s")).toHaveLength(2);
+    expect(screen.getByText("0s")).toBeInTheDocument();
+  });
+
   it("renders baseline badge and relative score", async () => {
     renderPage();
 

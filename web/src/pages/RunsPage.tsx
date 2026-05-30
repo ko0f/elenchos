@@ -4,6 +4,7 @@ import type { ComparisonSummary } from "../api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import { FaIcon } from "../components/FaIcon";
+import { RunDurationCell } from "../components/RunDurationCell";
 import { RunTableProgressCell } from "../components/RunTableProgressCell";
 import { formatDate } from "../lib/format";
 import { canCompareRuns } from "../lib/runs";
@@ -115,6 +116,7 @@ export function RunsPage() {
                 <th>Started</th>
                 <th>Benchmark</th>
                 <th>Model</th>
+                <th>Duration</th>
                 <th>vs Baseline</th>
                 <th aria-label="Actions" />
               </tr>
@@ -153,6 +155,12 @@ export function RunsPage() {
                   <td>{formatDate(run.started_at)}</td>
                   <td>{run.benchmark?.id ?? "—"}</td>
                   <td>{run.model}</td>
+                  <td>
+                    <RunDurationCell
+                      startedAt={run.started_at}
+                      finishedAt={run.finished_at}
+                    />
+                  </td>
                   <td>
                     <RunTableProgressCell
                       runId={run.run_id}
