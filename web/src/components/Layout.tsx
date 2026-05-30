@@ -26,6 +26,14 @@ export function Layout() {
           >
             Runs
           </NavLink>
+          <NavLink
+            to="/prompt"
+            className={({ isActive }) =>
+              `layout__nav-link${isActive ? " layout__nav-link--active" : ""}`
+            }
+          >
+            Prompt
+          </NavLink>
         </nav>
         <ProviderHealth />
       </header>

@@ -91,3 +91,60 @@ export interface Provider {
 export interface ApiError {
   detail: string;
 }
+
+export interface ModelsResponse {
+  models: string[];
+}
+
+export interface CreateRunRequest {
+  benchmark: string;
+  model: string;
+  temperature?: number;
+  max_tokens?: number;
+  concurrency?: number;
+  allow_code_exec?: boolean;
+  judge?: string;
+}
+
+export interface CreateRunResponse {
+  job_id: string;
+  run_id?: string | null;
+}
+
+export interface PromptRequest {
+  model: string;
+  text: string;
+}
+
+export interface PromptResponse {
+  run_id: string;
+  output?: string | null;
+  latency_ms: number;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  finish_reason?: string | null;
+  error?: string | null;
+}
+
+export interface ProgressEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
+export interface JobStatus {
+  job_id: string;
+  kind: string;
+  status: "queued" | "running" | "done" | "error";
+  run_id?: string | null;
+  progress: ProgressEvent[];
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+}
+
+export interface TaskDoneData {
+  task_id: string;
+  index: number;
+  total: number;
+  score?: number | null;
+  error?: string | null;
+}

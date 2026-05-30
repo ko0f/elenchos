@@ -1,4 +1,10 @@
 import type {
+  CreateRunRequest,
+  CreateRunResponse,
+  JobStatus,
+  ModelsResponse,
+  PromptRequest,
+  PromptResponse,
   Provider,
   RunDetail,
   RunSummary,
@@ -58,6 +64,30 @@ export const api = {
   listProviders(): Promise<Provider[]> {
     return request("/providers");
   },
+
+  listProviderModels(name: string): Promise<ModelsResponse> {
+    return request(`/providers/${encodeURIComponent(name)}/models`);
+  },
+
+  createRun(body: CreateRunRequest): Promise<CreateRunResponse> {
+    return request("/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  prompt(body: PromptRequest): Promise<PromptResponse> {
+    return request("/prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  getJob(jobId: string): Promise<JobStatus> {
+    return request(`/jobs/${encodeURIComponent(jobId)}`);
+  },
 };
 
 export const queryKeys = {
@@ -68,4 +98,6 @@ export const queryKeys = {
   taskOutput: (runId: string, taskId: string) =>
     ["runs", runId, "output", taskId] as const,
   providers: ["providers"] as const,
+  providerModels: (name: string) => ["providers", name, "models"] as const,
+  job: (id: string) => ["jobs", id] as const,
 };

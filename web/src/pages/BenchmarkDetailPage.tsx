@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import { SuiteTaskPanel } from "../components/SuiteTaskPanel";
+import "../components/RunLauncher.css";
 
 export function BenchmarkDetailPage() {
   const { id = "" } = useParams();
@@ -49,6 +50,11 @@ export function BenchmarkDetailPage() {
             )}
           </div>
         )}
+        <div className="page-header__actions">
+          <Link to={`/run?benchmark=${encodeURIComponent(data.id)}`} className="btn btn--primary">
+            Run
+          </Link>
+        </div>
       </header>
 
       <div className="task-list">

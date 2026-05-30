@@ -28,7 +28,7 @@ const runDetail = {
   ],
 };
 
-const getTaskOutput = vi.fn(async () => "4");
+const getTaskOutput = vi.hoisted(() => vi.fn(async () => "4"));
 
 vi.mock("../api/client", () => ({
   api: {
