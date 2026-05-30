@@ -13,7 +13,9 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": true,
+            "subProcess": true,
+            "breakOnSystemExit": []
         },
         {
             "name": "BFF",
