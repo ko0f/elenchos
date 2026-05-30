@@ -38,18 +38,21 @@ const runs = [
   },
 ];
 
-const { listRuns, deleteRun } = vi.hoisted(() => ({
+const { listRuns, listComparisons, deleteRun } = vi.hoisted(() => ({
   listRuns: vi.fn(),
+  listComparisons: vi.fn(),
   deleteRun: vi.fn(),
 }));
 
 vi.mock("../api/client", () => ({
   api: {
     listRuns,
+    listComparisons,
     deleteRun,
   },
   queryKeys: {
     runs: ["runs"],
+    comparisons: ["comparisons"],
   },
 }));
 
@@ -70,8 +73,10 @@ describe("RunsPage", () => {
   beforeEach(() => {
     cleanup();
     listRuns.mockClear();
+    listComparisons.mockClear();
     deleteRun.mockClear();
     listRuns.mockResolvedValue(runs);
+    listComparisons.mockResolvedValue([]);
     mockNavigate.mockClear();
     vi.stubGlobal("confirm", () => true);
   });
@@ -140,5 +145,23 @@ describe("RunsPage", () => {
 
     await user.click(await screen.findByLabelText("Select run-a"));
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("renders comparisons table below runs", async () => {
+    listComparisons.mockResolvedValue([
+      {
+        comparison_id: "cmp-1",
+        mode: "pairwise",
+        judge_model: "ollama/judge",
+        benchmark_id: "text-reasoning-v1",
+        started_at: "2025-01-02T00:00:00Z",
+        run_ids: ["run-a", "run-b"],
+      },
+    ]);
+    renderPage();
+
+    expect(await screen.findByRole("table", { name: "Comparisons" })).toBeInTheDocument();
+    expect(screen.getByText("cmp-1")).toBeInTheDocument();
+    expect(screen.getByText("pairwise")).toBeInTheDocument();
   });
 });

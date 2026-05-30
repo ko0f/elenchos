@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
@@ -74,21 +75,29 @@ export function ComparisonDetailPage() {
             <th>Task</th>
             <th>Winner</th>
             {data.mode === "rubric" && data.runs.map((run) => <th key={run.run_id}>{run.model}</th>)}
-            <th>Rationale</th>
           </tr>
         </thead>
         <tbody>
-          {data.tasks.map((task) => (
-            <tr key={task.task_id}>
-              <td>{task.task_id}</td>
-              <td className="mono">{runLabel[task.winner_run_id ?? ""] ?? task.winner_run_id ?? "tie"}</td>
-              {data.mode === "rubric" &&
-                data.runs.map((run) => (
-                  <td key={run.run_id}>{task.scores?.[run.run_id]?.toFixed(2) ?? "—"}</td>
-                ))}
-              <td>{task.rationale ?? "—"}</td>
-            </tr>
-          ))}
+          {data.tasks.map((task) => {
+            const colSpan = 2 + (data.mode === "rubric" ? data.runs.length : 0);
+            return (
+              <Fragment key={task.task_id}>
+                <tr className="compare-task-table__main">
+                  <td>{task.task_id}</td>
+                  <td className="mono">
+                    {runLabel[task.winner_run_id ?? ""] ?? task.winner_run_id ?? "tie"}
+                  </td>
+                  {data.mode === "rubric" &&
+                    data.runs.map((run) => (
+                      <td key={run.run_id}>{task.scores?.[run.run_id]?.toFixed(2) ?? "—"}</td>
+                    ))}
+                </tr>
+                <tr className="compare-task-table__rationale">
+                  <td colSpan={colSpan}>{task.rationale ?? "—"}</td>
+                </tr>
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </>

@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "elenchos serve",
+            "name": "elenchos serve (BFF)",
             "type": "debugpy",
             "request": "launch",
             "module": "elenchos.cli",
@@ -18,7 +18,7 @@
             "breakOnSystemExit": []
         },
         {
-            "name": "BFF",
+            "name": "web dev (Vite)",
             "type": "node",
             "request": "launch",
             "runtimeExecutable": "npm",
@@ -26,6 +26,13 @@
             "cwd": "${workspaceFolder}/web",
             "console": "integratedTerminal",
             "skipFiles": ["<node_internals>/**"]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full stack dev",
+            "configurations": ["elenchos serve (BFF)", "web dev (Vite)"],
+            "stopAll": true
         }
     ]
 }

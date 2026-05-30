@@ -16,6 +16,15 @@
   margin-bottom: 1rem;
 }
 
+.runs-page-section {
+  margin-top: 2rem;
+}
+
+.runs-page-section__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+}
+
 .selection-actions__hint {
   font-size: 0.875rem;
   color: var(--text-secondary);
@@ -80,6 +89,16 @@
 .compare-task-table td,
 .compare-task-table th {
   vertical-align: top;
+}
+
+.compare-task-table__main td {
+  border-bottom: none;
+}
+
+.compare-task-table__rationale td {
+  padding-top: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
 }
 
 .compare-task-table .mono,
