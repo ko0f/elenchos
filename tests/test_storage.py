@@ -7,6 +7,7 @@ from elenchos.storage import (
     DEFAULT_TASK_ID,
     append_result,
     create_run,
+    delete_run,
     finalize_run,
     find_run,
     list_runs,
@@ -55,6 +56,19 @@ def test_storage_round_trip(data_dir):
     assert results[0].output == "4"
     assert results[0].latency_ms == 123.4
     assert read_output(run_dir, output_ref) == "4"
+
+
+def test_delete_run(data_dir):
+    run_dir, run = create_run(
+        model="ollama/llama3.1:8b",
+        params={"temperature": 0.0},
+    )
+    finalize_run(run_dir, run)
+
+    assert delete_run(run.run_id) is True
+    assert not run_dir.exists()
+    assert list_runs() == []
+    assert delete_run(run.run_id) is False
 
 
 def test_list_and_find_run(data_dir):

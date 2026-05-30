@@ -21,6 +21,10 @@
   color: var(--text-secondary);
 }
 
+.selection-actions__hint--error {
+  color: var(--error);
+}
+
 .leaderboard-table {
   width: 100%;
   border-collapse: collapse;

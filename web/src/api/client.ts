@@ -62,6 +62,10 @@ export const api = {
     return request(`/runs/${encodeURIComponent(runId)}`);
   },
 
+  deleteRun(runId: string): Promise<void> {
+    return request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+  },
+
   async getRunJob(runId: string): Promise<RunJob | null> {
     const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}/job`);
     if (response.status === 404) {

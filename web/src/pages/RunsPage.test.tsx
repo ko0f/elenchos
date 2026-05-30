@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RunsPage } from "./RunsPage";
 
 const mockNavigate = vi.fn();
@@ -32,9 +32,15 @@ const runs = [
   },
 ];
 
+const { listRuns, deleteRun } = vi.hoisted(() => ({
+  listRuns: vi.fn(),
+  deleteRun: vi.fn(),
+}));
+
 vi.mock("../api/client", () => ({
   api: {
-    listRuns: vi.fn(async () => runs),
+    listRuns,
+    deleteRun,
   },
   queryKeys: {
     runs: ["runs"],
@@ -55,6 +61,19 @@ function renderPage() {
 }
 
 describe("RunsPage", () => {
+  beforeEach(() => {
+    cleanup();
+    listRuns.mockClear();
+    deleteRun.mockClear();
+    listRuns.mockResolvedValue(runs);
+    mockNavigate.mockClear();
+    vi.stubGlobal("confirm", () => true);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   it("enables compare only for two same-benchmark runs", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -70,5 +89,23 @@ describe("RunsPage", () => {
 
     await user.click(compare);
     expect(mockNavigate).toHaveBeenCalledWith("/compare?runs=run-a,run-b");
+  });
+
+  it("deletes a run after confirmation", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "Delete run-a" }));
+    expect(deleteRun).toHaveBeenCalledWith("run-a", expect.anything());
+  });
+
+  it("does not delete when confirmation is cancelled", async () => {
+    vi.stubGlobal("confirm", () => false);
+    const user = userEvent.setup();
+    renderPage();
+
+    const [deleteButton] = await screen.findAllByRole("button", { name: "Delete run-a" });
+    await user.click(deleteButton);
+    expect(deleteRun).not.toHaveBeenCalled();
   });
 });

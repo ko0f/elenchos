@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import { ScoreBadge } from "../components/ScoreBadge";
 import { formatDate, meanScore } from "../lib/format";
@@ -10,10 +10,24 @@ import "../components/RunPicker.css";
 
 export function RunsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.runs,
     queryFn: api.listRuns,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteRun,
+    onSuccess: (_data, runId) => {
+      setDeleteError(null);
+      setSelected((ids) => ids.filter((id) => id !== runId));
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs });
+    },
+    onError: (err) => {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete run");
+    },
   });
 
   const compareEnabled = useMemo(
@@ -23,6 +37,13 @@ export function RunsPage() {
 
   function goCompare() {
     void navigate(`/compare?runs=${selected.map(encodeURIComponent).join(",")}`);
+  }
+
+  function confirmDelete(runId: string) {
+    if (!window.confirm(`Delete run ${runId}? This cannot be undone.`)) {
+      return;
+    }
+    deleteMutation.mutate(runId);
   }
 
   if (isLoading) {
@@ -73,6 +94,11 @@ export function RunsPage() {
             Compare needs 2+ runs from the same benchmark.
           </span>
         )}
+        {deleteError && (
+          <span className="selection-actions__hint selection-actions__hint--error">
+            {deleteError}
+          </span>
+        )}
       </div>
 
       <table className="runs-table">
@@ -84,6 +110,7 @@ export function RunsPage() {
             <th>Benchmark</th>
             <th>Model</th>
             <th>Mean score</th>
+            <th aria-label="Actions" />
           </tr>
         </thead>
         <tbody>
@@ -111,6 +138,17 @@ export function RunsPage() {
               <td>{run.model}</td>
               <td>
                 <ScoreBadge score={meanScore(run.summary)} />
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm"
+                  aria-label={`Delete ${run.run_id}`}
+                  disabled={deleteMutation.isPending}
+                  onClick={() => confirmDelete(run.run_id)}
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           ))}

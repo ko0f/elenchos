@@ -198,6 +198,26 @@ def test_get_unknown_run_returns_404(api_client):
     assert response.status_code == 404
 
 
+def test_delete_run(seeded_run):
+    client, run = seeded_run
+
+    response = client.delete(f"/api/runs/{run.run_id}")
+    assert response.status_code == 204
+    assert response.content == b""
+
+    list_response = client.get("/api/runs")
+    assert list_response.json() == []
+
+    detail = client.get(f"/api/runs/{run.run_id}")
+    assert detail.status_code == 404
+
+
+def test_delete_unknown_run_returns_404(api_client):
+    client, _settings = api_client
+    response = client.delete("/api/runs/missing-run")
+    assert response.status_code == 404
+
+
 def test_get_run_job(seeded_run):
     client, run = seeded_run
     from elenchos.web.jobs import Job, job_manager

@@ -114,6 +114,23 @@
   border-color: var(--accent-hover);
 }
 
+.btn--danger {
+  background: var(--error-bg);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--on-accent);
+}
+
+.btn--sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
 .page-header__actions {
   margin-top: 0.75rem;
   display: flex;

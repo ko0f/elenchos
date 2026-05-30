@@ -17,6 +17,7 @@ from elenchos.storage import (
     DEFAULT_TASK_ID,
     append_result,
     create_run,
+    delete_run,
     finalize_run,
     find_run,
     list_runs,
@@ -161,6 +162,12 @@ def prompt_endpoint(
 @router.get("/runs", response_model=list[RunSummaryResponse])
 def list_runs_endpoint(settings: SettingsDep) -> list[RunSummaryResponse]:
     return [run_summary_from_domain(run) for run in list_runs(settings)]
+
+
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run_endpoint(run_id: str, settings: SettingsDep) -> None:
+    if not delete_run(run_id, settings):
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
 
 
 @router.get("/runs/{run_id}", response_model=RunDetailResponse)

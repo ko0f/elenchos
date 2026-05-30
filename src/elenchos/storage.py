@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -320,3 +321,16 @@ def find_run(
         if run.run_id == run_id:
             return entry, run
     return None
+
+
+def delete_run(
+    run_id: str,
+    settings: ElenchosSettings | None = None,
+) -> bool:
+    """Remove a run directory from disk. Returns False if the run does not exist."""
+    found = find_run(run_id, settings)
+    if found is None:
+        return False
+    run_dir, _run = found
+    shutil.rmtree(run_dir)
+    return True
