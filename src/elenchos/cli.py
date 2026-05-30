@@ -91,6 +91,37 @@ def version() -> None:
     console.print(__version__)
 
 
+@app.command()
+def serve(
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Bind address"),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", help="Listen port"),
+    ] = 8765,
+) -> None:
+    """Start the web UI backend (BFF)."""
+    try:
+        import uvicorn
+    except ImportError as exc:
+        console.print(
+            "[red]Web dependencies not installed.[/red] "
+            "Run: [bold]uv sync --all-groups --extra web[/bold]"
+        )
+        raise typer.Exit(code=1) from exc
+
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        console.print(
+            "[yellow]Warning: binding to a non-localhost address exposes "
+            "provider API keys and local run data to the network.[/yellow]"
+        )
+
+    console.print(f"[dim]BFF listening on http://{host}:{port}[/dim]")
+    uvicorn.run("elenchos.web.app:app", host=host, port=port)
+
+
 @providers_app.command("list")
 def providers_list() -> None:
     """List configured providers and health status."""
