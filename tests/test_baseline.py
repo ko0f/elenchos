@@ -201,64 +201,6 @@ def test_comparison_baseline_uses_rubric_mean(data_dir, monkeypatch):
     assert cached["comparison_id"] == "cmp-test"
 
 
-def test_judge_baseline_for_unit_test_suite(data_dir, monkeypatch):
-    from elenchos.benchmarks.registry import resolve_benchmark
-    from elenchos.scoring.judge import ListwiseItem
-
-    monkeypatch.setattr(
-        "elenchos.baseline.compute_comparison_baseline_comparison",
-        lambda *args, **kwargs: None,
-    )
-
-    _base_dir, baseline = _seed_run(
-        benchmark_id="coding-basics-v1",
-        model="ollama/base",
-        task_scores={"a": 1.0},
-        outputs={"a": "baseline code"},
-    )
-    _cand_dir, candidate = _seed_run(
-        benchmark_id="coding-basics-v1",
-        model="ollama/cand",
-        task_scores={"a": 1.0},
-        outputs={"a": "candidate code"},
-    )
-    set_baseline("coding-basics-v1", baseline.run_id)
-
-    def fake_listwise(judge, *, prompt, outputs, rubric, strict, context):
-        assert outputs[0] == "baseline code"
-        assert outputs[1] == "candidate code"
-        return [
-            ListwiseItem(score=1.0),
-            ListwiseItem(score=0.5),
-        ]
-
-    monkeypatch.setattr("elenchos.scoring.judge.judge_listwise", fake_listwise)
-    monkeypatch.setattr(
-        "elenchos.baseline.resolve_judge_config",
-        lambda **kwargs: type("Cfg", (), {"model": "ollama/judge", "mode": "rubric"})(),
-    )
-    monkeypatch.setattr(
-        "elenchos.compare._build_judge_context",
-        lambda model, **kwargs: object(),
-    )
-    suite = resolve_benchmark("coding-basics-v1")
-    monkeypatch.setattr(
-        "elenchos.compare._resolve_rubric",
-        lambda s, task_id: ("rubric text", suite.tasks[0]),
-    )
-
-    comparison = get_or_compute_baseline_comparison(candidate.run_id)
-    assert comparison is not None
-    assert comparison.relative_score == pytest.approx(0.5)
-    assert comparison.tasks[0].baseline_score == pytest.approx(1.0)
-    assert comparison.tasks[0].score == pytest.approx(0.5)
-
-    cached = read_baseline_score(_cand_dir)
-    assert cached["method"] == "judge"
-    assert comparison.score_method == "judge"
-    assert cached["relative_score"] == pytest.approx(0.5)
-
-
 def test_cache_hit_and_stale_recompute(data_dir):
     _base_dir, baseline = _seed_run(task_scores={"a": 1.0})
     _cand_dir, candidate = _seed_run(task_scores={"a": 0.5})

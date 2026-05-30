@@ -30,6 +30,22 @@ into your environment with `uv sync` and call `elenchos` directly.
 Provider endpoints resolve in this order: **CLI flags → environment variables →
 `~/.elenchos/config.yaml` → built-in defaults**.
 
+### Multiple LM Studio hosts
+
+Keep the default `lmstudio` provider on localhost and add a second entry in
+`~/.elenchos/config.yaml` (see [`config.yaml.example`](config.yaml.example)):
+
+```yaml
+providers:
+  lmstudio:
+    base_url: http://localhost:1234/v1
+  lmstudio-remote:
+    base_url: http://192.168.1.50:1234/v1
+```
+
+Use `lmstudio/<model>` for local and `lmstudio-remote/<model>` for remote.
+Override the remote URL via `ELENCHOS_LMSTUDIO_REMOTE_BASE_URL` if needed.
+
 ## Quick start
 
 ### Web UI

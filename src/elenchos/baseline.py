@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from elenchos.config import ElenchosSettings, resolve_judge_config
+from elenchos.config import ElenchosSettings
 from elenchos.models import Result
 from elenchos.storage import (
     find_comparison,
@@ -23,7 +23,6 @@ from elenchos.storage import (
 logger = logging.getLogger(__name__)
 
 _CACHE_METHOD_STORED = "stored"
-_CACHE_METHOD_JUDGE = "judge"
 _CACHE_METHOD_COMPARISON = "comparison"
 
 
@@ -53,29 +52,6 @@ def _scored_task_scores(results: list[Result]) -> dict[str, float]:
         if result.error is None and result.score is not None:
             scores[result.task_id] = result.score
     return scores
-
-
-def _results_by_task(results: list[Result]) -> dict[str, Result]:
-    return {result.task_id: result for result in results}
-
-
-def _output_text(result: Result) -> str:
-    return result.output or ""
-
-
-def _shared_task_ids(
-    baseline_results: list[Result],
-    candidate_results: list[Result],
-) -> list[str]:
-    def comparable(results: list[Result]) -> set[str]:
-        return {
-            result.task_id
-            for result in results
-            if not result.error and (result.output or result.output_ref)
-        }
-
-    shared = comparable(baseline_results) & comparable(candidate_results)
-    return sorted(shared)
 
 
 def _relative_score(
@@ -286,110 +262,6 @@ def compute_comparison_baseline_comparison(
     )
 
 
-def compute_judge_baseline_comparison(
-    run_id: str,
-    settings: ElenchosSettings | None = None,
-) -> BaselineComparison | None:
-    """Score candidate outputs vs baseline with the configured judge (rubric)."""
-    from elenchos.benchmarks.registry import resolve_benchmark
-    from elenchos.compare import _build_judge_context, _resolve_rubric
-    from elenchos.scoring.judge import JudgeProviderError, judge_listwise
-
-    found = find_run(run_id, settings)
-    if found is None:
-        return None
-    run_dir, run = found
-    if run.benchmark is None:
-        return None
-
-    benchmark_id = run.benchmark.id
-    baseline_run_id = get_baseline_run_id(benchmark_id, settings)
-    if baseline_run_id is None or run_id == baseline_run_id:
-        return None
-
-    baseline_found = find_run(baseline_run_id, settings)
-    if baseline_found is None:
-        return None
-    baseline_dir, baseline_run = baseline_found
-
-    try:
-        judge_config = resolve_judge_config(settings=settings)
-    except ValueError as exc:
-        logger.warning("Judge baseline config invalid for %s: %s", run_id, exc)
-        return None
-    if not judge_config.model:
-        logger.warning(
-            "Judge baseline skipped for %s: no judge.model in config.yaml",
-            run_id,
-        )
-        return None
-
-    judge = _build_judge_context(judge_config.model, settings=settings)
-    baseline_results = load_results(baseline_dir, include_output=True)
-    candidate_results = load_results(run_dir, include_output=True)
-    task_ids = _shared_task_ids(baseline_results, candidate_results)
-    if not task_ids:
-        computed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-        return BaselineComparison(
-            baseline_run_id=baseline_run_id,
-            baseline_model=baseline_run.model,
-            relative_score=None,
-            is_baseline=False,
-            tasks=[],
-            computed_at=computed_at,
-        )
-
-    suite = resolve_benchmark(benchmark_id, settings=settings)
-    by_baseline = _results_by_task(baseline_results)
-    by_candidate = _results_by_task(candidate_results)
-    baseline_scores: dict[str, float] = {}
-    candidate_scores: dict[str, float] = {}
-
-    for task_id in task_ids:
-        base_result = by_baseline[task_id]
-        cand_result = by_candidate[task_id]
-        prompt = base_result.prompt or cand_result.prompt or ""
-        rubric, _suite_task = _resolve_rubric(suite, task_id)
-        try:
-            items = judge_listwise(
-                judge,
-                prompt=prompt,
-                outputs=[
-                    _output_text(base_result),
-                    _output_text(cand_result),
-                ],
-                rubric=rubric,
-                strict=True,
-                context=f"baseline task={task_id}",
-            )
-        except JudgeProviderError as exc:
-            logger.warning("Judge baseline failed for %s/%s: %s", run_id, task_id, exc)
-            return None
-        baseline_scores[task_id] = items[0].score
-        candidate_scores[task_id] = items[1].score
-
-    relative = _relative_score(baseline_scores, candidate_scores)
-    tasks = [
-        BaselineTask(
-            task_id=task_id,
-            baseline_score=baseline_scores[task_id],
-            score=candidate_scores[task_id],
-            delta=candidate_scores[task_id] - baseline_scores[task_id],
-        )
-        for task_id in task_ids
-    ]
-    computed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    return BaselineComparison(
-        baseline_run_id=baseline_run_id,
-        baseline_model=baseline_run.model,
-        relative_score=relative,
-        is_baseline=False,
-        tasks=tasks,
-        computed_at=computed_at,
-        score_method=_CACHE_METHOD_JUDGE,
-    )
-
-
 def compute_baseline_comparison(
     run_id: str,
     settings: ElenchosSettings | None = None,
@@ -424,13 +296,7 @@ def compute_baseline_comparison(
     baseline_dir, baseline_run = baseline_found
 
     if benchmark_prefers_judge_baseline(benchmark_id, settings):
-        from_comparison = compute_comparison_baseline_comparison(run_id, settings)
-        if from_comparison is not None:
-            return from_comparison
-        judged = compute_judge_baseline_comparison(run_id, settings)
-        if judged is not None:
-            return judged
-        return None
+        return compute_comparison_baseline_comparison(run_id, settings)
 
     return _compute_stored_baseline_comparison(
         run_dir=run_dir,

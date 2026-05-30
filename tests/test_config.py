@@ -172,6 +172,26 @@ def test_get_provider_openrouter_reads_api_key_env(
     assert provider.api_key == "sk-or-secret"
 
 
+def test_resolve_provider_endpoint_env_for_custom_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    config_dir = tmp_path / "elenchos"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "providers:\n  lmstudio-remote:\n"
+        "    base_url: http://yaml-host:1234/v1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(
+        "ELENCHOS_LMSTUDIO_REMOTE_BASE_URL",
+        "http://env-host:1234/v1",
+    )
+    settings = ElenchosSettings(data_dir=config_dir)
+    endpoint = resolve_provider_endpoint("lmstudio-remote", settings=settings)
+    assert endpoint.base_url == "http://env-host:1234/v1"
+
+
 def test_get_provider_custom_from_yaml(tmp_path: Path):
     config_dir = tmp_path / "elenchos"
     config_dir.mkdir()

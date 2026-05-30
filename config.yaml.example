@@ -10,6 +10,9 @@ providers:
     base_url: http://localhost:11434
   lmstudio:
     base_url: http://localhost:1234/v1
+  # Second LM Studio host (optional). Use model IDs like lmstudio-remote/<model>.
+  # lmstudio-remote:
+  #   base_url: http://192.168.1.50:1234/v1
   openrouter:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY

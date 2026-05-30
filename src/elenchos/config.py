@@ -106,6 +106,15 @@ def _provider_yaml(name: str, yaml_config: dict) -> dict:
     return provider_yaml if isinstance(provider_yaml, dict) else {}
 
 
+def _provider_env_key(name: str, suffix: str) -> str:
+    normalized = name.upper().replace("-", "_")
+    return f"ELENCHOS_{normalized}_{suffix}"
+
+
+def _env_provider_value(name: str, suffix: str) -> str | None:
+    return os.environ.get(_provider_env_key(name, suffix))
+
+
 def _resolve_api_key(
     name: str,
     *,
@@ -126,7 +135,9 @@ def _resolve_api_key(
     if cli_api_key:
         return cli_api_key
 
-    env_api_key = getattr(settings, f"{name}_api_key", None)
+    env_api_key = getattr(settings, f"{name}_api_key", None) or _env_provider_value(
+        name, "API_KEY"
+    )
     if env_api_key:
         return str(env_api_key)
 
@@ -211,7 +222,9 @@ def resolve_provider_endpoint(
     provider_yaml = _provider_yaml(name, yaml_config)
     defaults = BUILTIN_PROVIDERS.get(name)
 
-    env_base_url = getattr(settings, f"{name}_base_url", None)
+    env_base_url = getattr(settings, f"{name}_base_url", None) or _env_provider_value(
+        name, "BASE_URL"
+    )
 
     base_url = (
         cli_base_url

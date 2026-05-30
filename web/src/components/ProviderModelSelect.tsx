@@ -22,13 +22,20 @@ export function ProviderModelSelect({
   disabled = false,
 }: ProviderModelSelectProps) {
   const healthyProviders = providers.filter((item) => item.healthy);
-  const selectedProvider = provider || healthyProviders[0]?.name || "";
+  const selectedProvider =
+    provider && providers.some((item) => item.name === provider)
+      ? provider
+      : healthyProviders[0]?.name || "";
 
   useEffect(() => {
     if (!provider && healthyProviders[0]) {
       onProviderChange(healthyProviders[0].name);
     }
   }, [provider, healthyProviders, onProviderChange]);
+
+  function providerLabel(item: Provider): string {
+    return `${item.name} (${item.base_url})`;
+  }
 
   const { data: modelsData, isLoading: modelsLoading, isError: modelsError } = useQuery({
     queryKey: queryKeys.providerModels(selectedProvider),
@@ -52,12 +59,16 @@ export function ProviderModelSelect({
             onModelChange("");
           }}
         >
-          {healthyProviders.length === 0 && (
+          {providers.length === 0 && (
+            <option value="">No providers configured</option>
+          )}
+          {healthyProviders.length === 0 && providers.length > 0 && (
             <option value="">No healthy providers</option>
           )}
-          {healthyProviders.map((item) => (
-            <option key={item.name} value={item.name}>
-              {item.name}
+          {providers.map((item) => (
+            <option key={item.name} value={item.name} disabled={!item.healthy}>
+              {providerLabel(item)}
+              {!item.healthy ? " — offline" : ""}
             </option>
           ))}
         </select>
