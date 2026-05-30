@@ -59,7 +59,21 @@ def generation_params_to_dict(params: GenerationParams) -> dict:
         payload["seed"] = params.seed
     if params.stop is not None:
         payload["stop"] = params.stop
+    if params.reasoning_effort is not None:
+        payload["reasoning_effort"] = params.reasoning_effort
     return payload
+
+
+def judge_generation_params(*, reasoning_effort: str | None = None) -> GenerationParams:
+    """Default judge call params with optional reasoning effort."""
+    params = default_generation_params()
+    if reasoning_effort is None:
+        return params
+    return GenerationParams(
+        temperature=params.temperature,
+        max_tokens=params.max_tokens,
+        reasoning_effort=reasoning_effort,
+    )
 
 
 @dataclass

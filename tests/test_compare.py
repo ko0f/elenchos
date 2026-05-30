@@ -169,6 +169,30 @@ def test_compare_requires_same_benchmark(tmp_path: Path, monkeypatch):
         compare_runs([run_a, run_b], judge_model="mock/judge")
 
 
+def test_judge_generation_params_effort():
+    from elenchos.models import judge_generation_params
+
+    params = judge_generation_params(reasoning_effort="high")
+    assert params.reasoning_effort == "high"
+
+    default = judge_generation_params()
+    assert default.reasoning_effort is None
+
+
+def test_build_judge_context_includes_effort(monkeypatch):
+    from elenchos.compare import _build_judge_context
+
+    provider = MockJudgeProvider()
+    monkeypatch.setattr(
+        "elenchos.compare.get_provider",
+        lambda _name, *, settings=None: provider,
+    )
+
+    ctx = _build_judge_context("mock/judge", reasoning_effort="medium")
+    assert ctx.params is not None
+    assert ctx.params.reasoning_effort == "medium"
+
+
 def test_compare_cli_pairwise(tmp_path: Path, monkeypatch):
     from typer.testing import CliRunner
 

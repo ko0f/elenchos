@@ -553,6 +553,13 @@ def compare(
         str | None,
         typer.Option("--judge", help="Judge model (provider/model)"),
     ] = None,
+    judge_effort: Annotated[
+        str | None,
+        typer.Option(
+            "--judge-effort",
+            help="Reasoning effort for the judge model (low, medium, high)",
+        ),
+    ] = None,
 ) -> None:
     """Compare benchmark runs using a judge LLM."""
     if len(run_ids) < 2:
@@ -564,6 +571,7 @@ def compare(
             run_ids,
             mode=mode,
             judge_model=judge,
+            judge_effort=judge_effort,
         )
     except CompareError as exc:
         console.print(f"[red]{exc}[/red]")

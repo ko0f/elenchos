@@ -36,6 +36,7 @@ class JudgeContext:
     provider: Provider
     model: str
     qualified: str
+    params: GenerationParams | None = None
 
 
 def extract_json_object(text: str) -> dict:
@@ -131,7 +132,7 @@ def _call_judge(
     completion = judge.provider.complete(
         judge.model,
         build_messages(user_content, system=_JUDGE_SYSTEM),
-        params or default_generation_params(),
+        params or judge.params or default_generation_params(),
     )
     return completion.text
 

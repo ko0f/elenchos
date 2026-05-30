@@ -3,9 +3,20 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import { CompareProgress } from "../components/CompareProgress";
+import { ProviderModelSelect, qualifiedModel } from "../components/ProviderModelSelect";
+import { useLocalStorageState } from "../hooks/useLocalStorageState";
 import { canCompareRuns } from "../lib/runs";
 import "../components/RunLauncher.css";
 import "./ComparePage.css";
+
+const COMPARE_PREFS_KEY = "elenchos.compare.prefs";
+
+interface ComparePrefs {
+  mode: string;
+  judgeProvider: string;
+  judgeModel: string;
+  judgeEffort: string;
+}
 
 export function ComparePage() {
   const [searchParams] = useSearchParams();
@@ -14,23 +25,44 @@ export function ComparePage() {
     () => searchParams.get("runs")?.split(",").filter(Boolean) ?? [],
     [searchParams],
   );
-  const [mode, setMode] = useState(initialRuns.length === 2 ? "pairwise" : "rubric");
-  const [judge, setJudge] = useState("");
+  const defaultMode = initialRuns.length === 2 ? "pairwise" : "rubric";
+  const [prefs, setPrefs] = useLocalStorageState<ComparePrefs>(COMPARE_PREFS_KEY, {
+    mode: defaultMode,
+    judgeProvider: "",
+    judgeModel: "",
+    judgeEffort: "",
+  });
+  const mode =
+    prefs.mode === "pairwise" && initialRuns.length !== 2 ? "rubric" : prefs.mode;
+  const { judgeProvider, judgeModel, judgeEffort } = prefs;
   const [jobId, setJobId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const updatePrefs = useCallback(
+    (patch: Partial<ComparePrefs>) => {
+      setPrefs((current) => ({ ...current, ...patch }));
+    },
+    [setPrefs],
+  );
 
   const { data: runs = [] } = useQuery({
     queryKey: queryKeys.runs,
     queryFn: api.listRuns,
   });
 
+  const { data: providers = [] } = useQuery({
+    queryKey: queryKeys.providers,
+    queryFn: api.listProviders,
+  });
+
+  const judge = qualifiedModel(judgeProvider, judgeModel);
   const selectedRuns = runs.filter((run) => initialRuns.includes(run.run_id));
   const compareValid = canCompareRuns(initialRuns, runs);
   const canSubmit =
     initialRuns.length >= 2 &&
     compareValid &&
-    judge.trim().length > 0 &&
+    Boolean(judge) &&
     (mode !== "pairwise" || initialRuns.length === 2) &&
     !submitting &&
     !jobId;
@@ -53,7 +85,10 @@ export function ComparePage() {
       const response = await api.createCompare({
         run_ids: initialRuns,
         mode,
-        judge: judge.trim(),
+        judge,
+        ...(judgeEffort
+          ? { judge_effort: judgeEffort as "low" | "medium" | "high" }
+          : {}),
       });
       setJobId(response.job_id);
     } catch (exc) {
@@ -108,7 +143,7 @@ export function ComparePage() {
             <select
               className="form-field__input"
               value={mode}
-              onChange={(event) => setMode(event.target.value)}
+              onChange={(event) => updatePrefs({ mode: event.target.value })}
             >
               <option value="pairwise" disabled={initialRuns.length !== 2}>
                 Pairwise (2 runs)
@@ -117,15 +152,28 @@ export function ComparePage() {
             </select>
           </label>
 
+          <ProviderModelSelect
+            provider={judgeProvider}
+            model={judgeModel}
+            onProviderChange={(value) => updatePrefs({ judgeProvider: value, judgeModel: "" })}
+            onModelChange={(value) => updatePrefs({ judgeModel: value })}
+            providers={providers}
+            disabled={submitting}
+          />
+
           <label className="form-field">
-            <span className="form-field__label">Judge model</span>
-            <input
+            <span className="form-field__label">Effort level</span>
+            <select
               className="form-field__input"
-              type="text"
-              placeholder="provider/model"
-              value={judge}
-              onChange={(event) => setJudge(event.target.value)}
-            />
+              value={judgeEffort}
+              disabled={submitting}
+              onChange={(event) => updatePrefs({ judgeEffort: event.target.value })}
+            >
+              <option value="">Default</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
           </label>
 
           {error && <div className="run-launcher__error">{error}</div>}

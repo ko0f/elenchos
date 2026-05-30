@@ -45,6 +45,7 @@ def create_compare_endpoint(
             settings=settings,
             mode=mode,
             judge_model=request.judge,
+            judge_effort=request.judge_effort,
         )
     except CompareError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

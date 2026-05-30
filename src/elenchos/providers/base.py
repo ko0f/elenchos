@@ -15,6 +15,7 @@ class GenerationParams:
     max_tokens: int | None = None
     seed: int | None = None
     stop: list[str] | None = None
+    reasoning_effort: str | None = None
 
 
 @dataclass

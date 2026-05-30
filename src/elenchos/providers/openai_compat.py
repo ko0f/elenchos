@@ -73,6 +73,8 @@ class OpenAICompatProvider:
             payload["seed"] = params.seed
         if params.stop is not None:
             payload["stop"] = params.stop
+        if params.reasoning_effort is not None:
+            payload["reasoning_effort"] = params.reasoning_effort
 
         logger.debug("POST %s/chat/completions model=%s", self.base_url, model)
         logger.debug("request payload: %s", payload)

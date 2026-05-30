@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from elenchos.config import ElenchosSettings, resolve_judge_config
-from elenchos.models import Result, Run, parse_model_id
+from elenchos.models import Result, Run, judge_generation_params, parse_model_id
 from elenchos.providers.registry import get_provider
 from elenchos.scoring.judge import JudgeContext, judge_rubric, pairwise_winner
 from elenchos.storage import find_run, load_results, save_comparison
@@ -82,6 +82,7 @@ def _build_judge_context(
     judge_model: str,
     *,
     settings: ElenchosSettings | None = None,
+    reasoning_effort: str | None = None,
 ) -> JudgeContext:
     model_id = parse_model_id(judge_model)
     provider = get_provider(model_id.provider, settings=settings)
@@ -93,6 +94,7 @@ def _build_judge_context(
         provider=provider,
         model=model_id.model,
         qualified=model_id.qualified,
+        params=judge_generation_params(reasoning_effort=reasoning_effort),
     )
 
 
@@ -159,6 +161,7 @@ def compare_runs(
     *,
     mode: str | None = None,
     judge_model: str | None = None,
+    judge_effort: str | None = None,
     settings: ElenchosSettings | None = None,
     persist: bool = True,
     on_event: CompareEventCallback = None,
@@ -181,7 +184,11 @@ def compare_runs(
 
     entries = load_runs_for_compare(run_ids, settings=settings)
     benchmark_id = entries[0][1].benchmark.id  # type: ignore[union-attr]
-    judge = _build_judge_context(judge_config.model, settings=settings)
+    judge = _build_judge_context(
+        judge_config.model,
+        settings=settings,
+        reasoning_effort=judge_effort,
+    )
     compare_mode = judge_config.mode
 
     started = datetime.now(UTC).isoformat()

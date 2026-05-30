@@ -149,6 +149,11 @@ class CreateCompareRequest(BaseModel):
     run_ids: list[str]
     mode: str | None = None
     judge: str | None = None
+    judge_effort: str | None = Field(
+        default=None,
+        pattern="^(low|medium|high)$",
+        description="Reasoning effort for the judge model (low, medium, high)",
+    )
 
 
 class CreateCompareResponse(BaseModel):

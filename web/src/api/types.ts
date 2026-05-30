@@ -190,6 +190,7 @@ export interface CreateCompareRequest {
   run_ids: string[];
   mode?: string;
   judge?: string;
+  judge_effort?: "low" | "medium" | "high";
 }
 
 export interface CreateCompareResponse {

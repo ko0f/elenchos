@@ -107,6 +107,30 @@ def test_format_model_output_reasoning_only():
 
 
 @patch("elenchos.providers.openai_compat.httpx.Client")
+def test_openai_compat_provider_sends_reasoning_effort(mock_client_cls):
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+        "usage": {},
+    }
+    mock_client.post.return_value = mock_response
+    mock_client_cls.return_value = mock_client
+
+    provider = OpenAICompatProvider("test", "http://localhost:1234/v1")
+    provider.complete(
+        "model",
+        [Message(role="user", content="hi")],
+        GenerationParams(reasoning_effort="high"),
+    )
+
+    payload = mock_client.post.call_args.kwargs["json"]
+    assert payload["reasoning_effort"] == "high"
+
+
+@patch("elenchos.providers.openai_compat.httpx.Client")
 def test_openai_compat_provider_reads_reasoning_content(mock_client_cls):
     mock_client = MagicMock()
     mock_client.__enter__.return_value = mock_client

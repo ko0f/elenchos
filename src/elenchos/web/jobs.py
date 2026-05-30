@@ -105,6 +105,7 @@ class JobManager:
         settings: ElenchosSettings,
         mode: str | None = None,
         judge_model: str | None = None,
+        judge_effort: str | None = None,
     ) -> Job:
         job = Job(job_id=uuid.uuid4().hex, kind="compare")
         self._register_job(job)
@@ -116,6 +117,7 @@ class JobManager:
                 "settings": settings,
                 "mode": mode,
                 "judge_model": judge_model,
+                "judge_effort": judge_effort,
             },
             daemon=True,
             name=f"elenchos-compare-{job.job_id[:8]}",
@@ -131,6 +133,7 @@ class JobManager:
         settings: ElenchosSettings,
         mode: str | None,
         judge_model: str | None,
+        judge_effort: str | None,
     ) -> None:
         job.status = "running"
 
@@ -148,6 +151,7 @@ class JobManager:
                 run_ids,
                 mode=mode,
                 judge_model=judge_model,
+                judge_effort=judge_effort,
                 settings=settings,
                 on_event=on_event,
             )

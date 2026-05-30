@@ -481,6 +481,19 @@ def test_post_compare_pairwise_rejects_three_runs(api_client):
     assert "exactly two runs" in response.json()["detail"]
 
 
+def test_post_compare_rejects_invalid_judge_effort(api_client):
+    client, _settings = api_client
+    response = client.post(
+        "/api/compare",
+        json={
+            "run_ids": ["a", "b"],
+            "judge": "ollama/llama3.1:8b",
+            "judge_effort": "turbo",
+        },
+    )
+    assert response.status_code == 422
+
+
 @patch("elenchos.web.jobs.compare_runs")
 def test_post_compare_enqueues_job(mock_compare_runs, api_client):
     client, settings = api_client
