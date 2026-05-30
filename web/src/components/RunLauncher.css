@@ -131,27 +131,26 @@
   font-size: 0.75rem;
 }
 
-.btn--icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem 0.4375rem;
-  line-height: 1;
+.btn.btn--icon {
   border: none;
   background: transparent;
+  color: var(--text-secondary);
 }
 
-.btn--icon:hover:not(:disabled) {
+.btn.btn--icon:hover:not(:disabled) {
+  background: var(--surface-hover);
   border: none;
+  color: var(--text);
 }
 
-.btn--icon.btn--danger {
-  background: transparent;
+.btn.btn--icon.btn--danger {
+  color: var(--muted);
 }
 
-.btn--icon.btn--danger:hover:not(:disabled) {
-  background: var(--error-bg);
+.btn.btn--icon.btn--danger:hover:not(:disabled) {
+  background: var(--surface-hover);
   border: none;
+  color: var(--error);
 }
 
 .btn--icon .fa-solid,
