@@ -123,24 +123,77 @@ def test_run_suite_records_task_errors(
     assert outcome.summary["pass_rate"] == 0.5
 
 
-def test_run_suite_rejects_coding_suite(tmp_path: Path, monkeypatch):
+def test_run_suite_rejects_coding_suite_without_flag(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     suite = BenchmarkSuite.model_validate(
         {
             "id": "coding",
             "version": 1,
             "type": "coding",
-            "tasks": [{"id": "a", "prompt": "code", "scoring": []}],
+            "tasks": [
+                {
+                    "id": "fizz",
+                    "prompt": "Write fizzbuzz.",
+                    "scoring": [
+                        {
+                            "type": "unit_test",
+                            "language": "python",
+                            "entrypoint": "fizzbuzz",
+                            "tests": "assert True",
+                        }
+                    ],
+                }
+            ],
         }
     )
 
-    with pytest.raises(SuiteRunError, match="only text suites"):
+    with pytest.raises(SuiteRunError, match="allow-code-exec"):
         run_suite(
             suite,
             "mock/mock-model",
             provider=MockProvider(),
             show_progress=False,
         )
+
+
+CODING_SUITE = """\
+id: tiny-coding
+version: 1
+type: coding
+tasks:
+  - id: add
+    prompt: Write add(a, b).
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: add
+        tests: |
+          assert add(1, 2) == 3
+          assert add(0, 0) == 0
+"""
+
+
+def test_run_suite_coding_with_mock_provider(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+    suite = BenchmarkSuite.model_validate(yaml.safe_load(CODING_SUITE))
+
+    good_code = "def add(a, b):\n    return a + b\n"
+    provider = MockProvider(
+        responses={"Write add(a, b).": good_code},
+    )
+
+    outcome = run_suite(
+        suite,
+        "mock/mock-model",
+        provider=provider,
+        show_progress=False,
+        allow_code_exec=True,
+    )
+
+    assert len(outcome.results) == 1
+    assert outcome.results[0].score == 1.0
+    assert outcome.results[0].passed == 2
+    assert outcome.results[0].total == 2
 
 
 def test_aggregate_run_summary():

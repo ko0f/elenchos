@@ -11,6 +11,7 @@ from elenchos.benchmarks.schema import (
     MetricsScorer,
     RegexMatchScorer,
     ScorerConfig,
+    UnitTestScorer,
 )
 
 
@@ -22,7 +23,7 @@ class ScoreOutcome:
     total: int | None = None
 
 
-UNSUPPORTED_SCORERS = frozenset({"unit_test", "judge_rubric"})
+UNSUPPORTED_SCORERS = frozenset({"judge_rubric"})
 
 
 def normalize_output(text: str) -> str:
@@ -45,14 +46,28 @@ def contains_all(output: str, strings: list[str]) -> float:
     return matched / len(strings)
 
 
-def score_with_scorer(output: str, scorer: ScorerConfig) -> ScoreOutcome:
+def score_with_scorer(
+    output: str,
+    scorer: ScorerConfig,
+    *,
+    allow_code_exec: bool = False,
+) -> ScoreOutcome:
     if isinstance(scorer, MetricsScorer):
         return ScoreOutcome(score=None, scorer="metrics")
 
     if scorer.type in UNSUPPORTED_SCORERS:
         raise ValueError(
             f"Scorer {scorer.type!r} is not supported in this release "
-            "(requires code execution or a judge model)."
+            "(requires a judge model)."
+        )
+
+    if isinstance(scorer, UnitTestScorer):
+        from elenchos.scoring.code_exec import run_unit_tests
+
+        return run_unit_tests(
+            output,
+            scorer,
+            allow_code_exec=allow_code_exec,
         )
 
     if isinstance(scorer, ExactMatchScorer):
@@ -87,9 +102,17 @@ def score_with_scorer(output: str, scorer: ScorerConfig) -> ScoreOutcome:
     raise ValueError(f"Unknown scorer type: {scorer.type!r}")
 
 
-def score_task_output(output: str, scorers: list[ScorerConfig]) -> ScoreOutcome:
+def score_task_output(
+    output: str,
+    scorers: list[ScorerConfig],
+    *,
+    allow_code_exec: bool = False,
+) -> ScoreOutcome:
     """Score model output against all configured scorers (metrics excluded)."""
-    outcomes = [score_with_scorer(output, scorer) for scorer in scorers]
+    outcomes = [
+        score_with_scorer(output, scorer, allow_code_exec=allow_code_exec)
+        for scorer in scorers
+    ]
     graded = [outcome for outcome in outcomes if outcome.score is not None]
 
     if not graded:

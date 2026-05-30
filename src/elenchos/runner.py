@@ -27,6 +27,7 @@ from elenchos.storage import append_result, create_run, finalize_run, save_outpu
 logger = logging.getLogger(__name__)
 
 TEXT_SCORERS = frozenset({"exact_match", "regex_match", "contains_all", "metrics"})
+CODING_SCORERS = frozenset({"unit_test", "metrics"})
 
 
 class SuiteRunError(ValueError):
@@ -85,28 +86,40 @@ def resolve_generation_params(
     )
 
 
-def _validate_suite_for_text_run(suite: BenchmarkSuite) -> None:
-    if suite.type != "text":
-        raise SuiteRunError(
-            f"Suite {suite.id!r} has type {suite.type!r}; "
-            "only text suites are supported in this release."
-        )
+def _validate_suite_for_run(
+    suite: BenchmarkSuite,
+    *,
+    allow_code_exec: bool,
+) -> None:
+    has_unit_test = False
 
     for task in suite.tasks:
         task_type = suite.effective_task_type(task)
-        if task_type != "text":
-            raise SuiteRunError(
-                f"Task {task.id!r} has type {task_type!r}; "
-                "coding tasks require code execution (not yet enabled)."
-            )
-
         for scorer in suite.effective_scoring(task):
-            if scorer.type not in TEXT_SCORERS:
+            if scorer.type == "unit_test":
+                has_unit_test = True
+            elif scorer.type == "judge_rubric":
+                raise SuiteRunError(
+                    f"Task {task.id!r} uses scorer {scorer.type!r}; "
+                    "judge scoring is not yet enabled."
+                )
+            elif task_type == "text" and scorer.type not in TEXT_SCORERS:
                 raise SuiteRunError(
                     f"Task {task.id!r} uses scorer {scorer.type!r}; "
                     "only exact_match, regex_match, and contains_all are "
-                    "supported in this release."
+                    "supported for text tasks."
                 )
+            elif task_type == "coding" and scorer.type not in CODING_SCORERS:
+                raise SuiteRunError(
+                    f"Task {task.id!r} uses scorer {scorer.type!r}; "
+                    "coding tasks require unit_test scoring."
+                )
+
+    if has_unit_test and not allow_code_exec:
+        raise SuiteRunError(
+            "Benchmark includes unit_test scoring, which executes untrusted "
+            "model-generated code. Re-run with --allow-code-exec to proceed."
+        )
 
 
 def _generation_params_to_dict(params: GenerationParams) -> dict:
@@ -127,6 +140,7 @@ def _run_task(
     params: GenerationParams,
     suite: BenchmarkSuite,
     task: Task,
+    allow_code_exec: bool = False,
 ) -> Result:
     messages = build_messages(task.prompt)
     scorers = suite.effective_scoring(task)
@@ -142,7 +156,11 @@ def _run_task(
             error=str(exc),
         )
 
-    score_outcome = score_task_output(completion.text, scorers)
+    score_outcome = score_task_output(
+        completion.text,
+        scorers,
+        allow_code_exec=allow_code_exec,
+    )
     return Result(
         task_id=task.id,
         prompt=task.prompt,
@@ -167,9 +185,10 @@ def run_suite(
     max_tokens: int | None = None,
     settings: ElenchosSettings | None = None,
     show_progress: bool = True,
+    allow_code_exec: bool = False,
 ) -> SuiteRunOutcome:
-    """Run all tasks in a text benchmark suite sequentially."""
-    _validate_suite_for_text_run(suite)
+    """Run all tasks in a benchmark suite sequentially."""
+    _validate_suite_for_run(suite, allow_code_exec=allow_code_exec)
 
     model_id = parse_model_id(model)
     provider = provider or get_provider(model_id.provider)
@@ -204,6 +223,7 @@ def run_suite(
                     params=params,
                     suite=suite,
                     task=task,
+                    allow_code_exec=allow_code_exec,
                 )
         else:
             result = _run_task(
@@ -212,6 +232,7 @@ def run_suite(
                 params=params,
                 suite=suite,
                 task=task,
+                allow_code_exec=allow_code_exec,
             )
 
         if result.error:

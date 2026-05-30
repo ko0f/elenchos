@@ -341,8 +341,15 @@ def run(
         int | None,
         typer.Option("--max-tokens", help="Override suite default max tokens"),
     ] = None,
+    allow_code_exec: Annotated[
+        bool,
+        typer.Option(
+            "--allow-code-exec",
+            help="Allow sandboxed execution of model-generated code (unit_test scorer)",
+        ),
+    ] = False,
 ) -> None:
-    """Run a text benchmark suite against a model."""
+    """Run a benchmark suite against a model."""
     try:
         suite = resolve_benchmark(
             benchmark,
@@ -358,6 +365,7 @@ def run(
             model,
             temperature=temperature,
             max_tokens=max_tokens,
+            allow_code_exec=allow_code_exec,
         )
     except SuiteRunError as exc:
         console.print(f"[red]{exc}[/red]")

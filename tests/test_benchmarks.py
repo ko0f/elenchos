@@ -84,10 +84,15 @@ def test_invalid_suite_raises_clear_error(
 def test_registry_includes_builtin_suite():
     discovered = discover_suite_paths()
     assert "text-reasoning-v1" in discovered
+    assert "coding-basics-v1" in discovered
 
     suite = load_suite(discovered["text-reasoning-v1"])
     assert suite.id == "text-reasoning-v1"
     assert len(suite.tasks) >= 3
+
+    coding = load_suite(discovered["coding-basics-v1"])
+    assert coding.type == "coding"
+    assert len(coding.tasks) == 2
 
 
 def test_user_suite_overrides_builtin(tmp_path, monkeypatch):

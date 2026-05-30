@@ -1,0 +1,35 @@
+id: coding-basics-v1
+version: 1
+type: coding
+description: Basic Python coding tasks with unit tests.
+defaults:
+  params:
+    temperature: 0.0
+    max_tokens: 1024
+tasks:
+  - id: fizzbuzz
+    prompt: |
+      Write a Python function `fizzbuzz(n)` that returns the FizzBuzz
+      string for integer n. Respond with code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: fizzbuzz
+        tests: |
+          assert fizzbuzz(3) == "Fizz"
+          assert fizzbuzz(5) == "Buzz"
+          assert fizzbuzz(15) == "FizzBuzz"
+          assert fizzbuzz(2) == "2"
+
+  - id: factorial
+    prompt: |
+      Write a Python function `factorial(n)` that returns n! for
+      non-negative integers n. Respond with code only.
+    scoring:
+      - type: unit_test
+        language: python
+        entrypoint: factorial
+        tests: |
+          assert factorial(0) == 1
+          assert factorial(1) == 1
+          assert factorial(5) == 120

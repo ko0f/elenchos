@@ -12,7 +12,24 @@ def test_bench_list_includes_builtin():
     result = runner.invoke(app, ["bench", "list"])
     assert result.exit_code == 0
     assert "text-reasoning-v1" in result.stdout
+    assert "coding-basics-v1" in result.stdout
     assert "text" in result.stdout
+    assert "coding" in result.stdout
+
+
+def test_run_coding_suite_refused_without_flag():
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--benchmark",
+            "coding-basics-v1",
+            "--model",
+            "ollama/llama3.1:8b",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "allow-code-exec" in result.stdout.lower()
 
 
 def test_bench_show_known_suite():
