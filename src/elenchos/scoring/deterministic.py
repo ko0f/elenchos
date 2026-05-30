@@ -67,8 +67,7 @@ def score_with_scorer(
             raise ValueError("judge_rubric scoring requires the task prompt")
         if judge is None:
             raise ValueError(
-                "judge_rubric scoring requires a judge model "
-                "(--judge or config judge.model)"
+                "judge_rubric scoring requires a judge model (--judge)"
             )
         return score_judge_rubric(output, scorer, prompt=prompt, judge=judge)
 

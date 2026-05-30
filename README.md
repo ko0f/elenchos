@@ -19,7 +19,7 @@ benchmark suites, persist results, and compare models with a judge LLM.
 
 ```bash
 uv sync --all-groups   # includes dev + web (BFF) dependency groups
-cp .env.example .env   # optional — override provider URLs and API keys
+cp .env.example .env   # optional — ELENCHOS_DATA_DIR and API keys
 ```
 
 Run commands with `uv run elenchos …` from the repo root, or install the package
@@ -27,8 +27,9 @@ into your environment with `uv sync` and call `elenchos` directly.
 
 ## Configuration
 
-Provider endpoints resolve in this order: **CLI flags → environment variables →
-`~/.elenchos/config.yaml` → built-in defaults**.
+Provider endpoints resolve in this order: **CLI flags →
+`~/.elenchos/config.yaml` → built-in defaults**. API keys referenced by
+`api_key_env` in config.yaml come from the environment (e.g. `OPENROUTER_API_KEY`).
 
 ### Multiple LM Studio hosts
 
@@ -44,7 +45,6 @@ providers:
 ```
 
 Use `lmstudio/<model>` for local and `lmstudio-remote/<model>` for remote.
-Override the remote URL via `ELENCHOS_LMSTUDIO_REMOTE_BASE_URL` if needed.
 
 ## Quick start
 
@@ -157,9 +157,9 @@ uv run elenchos compare run-a run-b --judge ollama/llama3.1:8b
 uv run elenchos report --runs run-a run-b run-c --format md
 ```
 
-Set `judge.model` in `~/.elenchos/config.yaml` to avoid passing `--judge` every
-time. Copy [`config.yaml.example`](config.yaml.example) to `~/.elenchos/config.yaml`
-as a starting point.
+Pick the judge model in the web Compare UI, or pass `--judge` on the CLI. Copy
+[`config.yaml.example`](config.yaml.example) to `~/.elenchos/config.yaml` for
+provider endpoints and run defaults.
 
 ## Web UI
 

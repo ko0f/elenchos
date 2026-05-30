@@ -191,8 +191,7 @@ def _validate_suite_for_run(
 
     if _suite_needs_judge(suite) and not judge_model:
         raise SuiteRunError(
-            "Benchmark uses judge_rubric scoring. Pass --judge or set "
-            "judge.model in ~/.elenchos/config.yaml."
+            "Benchmark uses judge_rubric scoring. Pass --judge."
         )
 
     for task in suite.tasks:

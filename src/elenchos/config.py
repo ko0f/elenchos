@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
 
 class ElenchosSettings(BaseSettings):
-    """Provider and data-dir settings (env prefix ELENCHOS_)."""
+    """Global settings (env prefix ELENCHOS_). Provider endpoints live in config.yaml."""
 
     model_config = SettingsConfigDict(
         env_prefix="ELENCHOS_",
@@ -40,12 +40,6 @@ class ElenchosSettings(BaseSettings):
 
     data_dir: Path = Path.home() / ".elenchos"
     request_timeout_s: float = 300.0
-    ollama_base_url: str | None = None
-    ollama_api_key: str | None = None
-    lmstudio_base_url: str | None = None
-    lmstudio_api_key: str | None = None
-    openrouter_base_url: str | None = None
-    openrouter_api_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,40 +100,22 @@ def _provider_yaml(name: str, yaml_config: dict) -> dict:
     return provider_yaml if isinstance(provider_yaml, dict) else {}
 
 
-def _provider_env_key(name: str, suffix: str) -> str:
-    normalized = name.upper().replace("-", "_")
-    return f"ELENCHOS_{normalized}_{suffix}"
-
-
-def _env_provider_value(name: str, suffix: str) -> str | None:
-    return os.environ.get(_provider_env_key(name, suffix))
-
-
 def _resolve_api_key(
     name: str,
     *,
     provider_yaml: dict,
     defaults: ProviderDefaults | None,
-    settings: ElenchosSettings,
     cli_api_key: str | None = None,
 ) -> str | None:
-    """Resolve API key: CLI > ELENCHOS_{NAME}_API_KEY > api_key_env."""
+    """Resolve API key: CLI > api_key_env from config.yaml or built-in defaults."""
     if provider_yaml.get("api_key"):
         logger.warning(
-            "Ignoring providers.%s.api_key in config.yaml; set api_key_env "
-            "(or ELENCHOS_%s_API_KEY) instead.",
+            "Ignoring providers.%s.api_key in config.yaml; set api_key_env instead.",
             name,
-            name.upper(),
         )
 
     if cli_api_key:
         return cli_api_key
-
-    env_api_key = getattr(settings, f"{name}_api_key", None) or _env_provider_value(
-        name, "API_KEY"
-    )
-    if env_api_key:
-        return str(env_api_key)
 
     api_key_env = provider_yaml.get("api_key_env") or (
         defaults.api_key_env if defaults else None
@@ -216,19 +192,14 @@ def resolve_provider_endpoint(
     cli_base_url: str | None = None,
     cli_api_key: str | None = None,
 ) -> ProviderEndpoint:
-    """Resolve provider endpoint: CLI > env > config.yaml > defaults."""
+    """Resolve provider endpoint: CLI > config.yaml > built-in defaults."""
     settings = settings or ElenchosSettings()
     yaml_config = load_yaml_config(settings)
     provider_yaml = _provider_yaml(name, yaml_config)
     defaults = BUILTIN_PROVIDERS.get(name)
 
-    env_base_url = getattr(settings, f"{name}_base_url", None) or _env_provider_value(
-        name, "BASE_URL"
-    )
-
     base_url = (
         cli_base_url
-        or env_base_url
         or provider_yaml.get("base_url")
         or default_base_url
         or (defaults.base_url if defaults else None)
@@ -236,15 +207,13 @@ def resolve_provider_endpoint(
     if not base_url:
         raise ValueError(
             f"No base URL configured for provider {name!r}. "
-            f"Set ELENCHOS_{name.upper()}_BASE_URL or "
-            f"{settings.data_dir / 'config.yaml'} providers.{name}.base_url"
+            f"Set {settings.data_dir / 'config.yaml'} providers.{name}.base_url"
         )
 
     api_key = _resolve_api_key(
         name,
         provider_yaml=provider_yaml,
         defaults=defaults,
-        settings=settings,
         cli_api_key=cli_api_key,
     )
 

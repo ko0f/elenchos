@@ -266,7 +266,7 @@ needed for v1.
 
 ```
 ~/.elenchos/
-├── config.yaml                     # default provider endpoints, judge model
+├── config.yaml                     # provider endpoints and run defaults
 ├── baselines.json                  # per-benchmark baseline run_id map
 ├── benchmarks/                     # user-authored suites
 │   └── my-suite.yaml
@@ -385,17 +385,13 @@ providers:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
 
-judge:
-  model: openrouter/anthropic/claude-sonnet-4-6
-  mode: pairwise
-
 defaults:
   temperature: 0.0
   max_tokens: 1024
   concurrency: 4
 ```
 
-Precedence: CLI flags > env vars > `config.yaml` > built-in defaults.
+Precedence: CLI flags > `config.yaml` > built-in defaults. API keys via `api_key_env`.
 
 ## 11. Security & Sandboxing
 

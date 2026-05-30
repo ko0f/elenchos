@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
+from elenchos.config import ElenchosSettings
 from elenchos.cli import app
 from elenchos.providers.base import GenerationParams, Message, format_model_output
 from elenchos.providers.openai_compat import OpenAICompatProvider
@@ -71,9 +72,11 @@ def test_openai_compat_provider_list_models(mock_client_cls):
 @patch("elenchos.providers.openai_compat.httpx.Client")
 def test_openai_compat_provider_sends_auth_header(
     mock_client_cls,
+    tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    settings = ElenchosSettings(data_dir=tmp_path)
     mock_client = MagicMock()
     mock_client.__enter__.return_value = mock_client
     mock_response = MagicMock()
@@ -81,7 +84,7 @@ def test_openai_compat_provider_sends_auth_header(
     mock_client.get.return_value = mock_response
     mock_client_cls.return_value = mock_client
 
-    provider = get_provider("openrouter")
+    provider = get_provider("openrouter", settings=settings)
     provider.health_check()
 
     headers = mock_client.get.call_args.kwargs["headers"]

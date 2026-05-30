@@ -147,7 +147,7 @@ def _build_judge_context(
         env_name = defaults.api_key_env
         raise CompareError(
             f"Judge provider {provider.name!r} requires an API key. "
-            f"Set {env_name} or ELENCHOS_{provider.name.upper()}_API_KEY."
+            f"Set {env_name}."
         )
     if not provider.health_check():
         raise CompareError(
@@ -245,8 +245,7 @@ def compare_runs(
         raise CompareError(str(exc)) from exc
     if not judge_config.model:
         raise CompareError(
-            "No judge model configured. Pass --judge or set judge.model in "
-            f"{settings.data_dir / 'config.yaml'}."
+            "No judge model configured. Pass --judge or select a judge in the web UI."
         )
 
     entries = load_runs_for_compare(run_ids, settings=settings)

@@ -325,7 +325,7 @@ def prompt(
     if not provider.health_check():
         console.print(
             f"[red]Provider {provider.name!r} is unhealthy at {provider.base_url}. "
-            "Check ELENCHOS_*_BASE_URL or ~/.elenchos/config.yaml.[/red]"
+            "Check ~/.elenchos/config.yaml providers.[/red]"
         )
         raise typer.Exit(code=1)
 

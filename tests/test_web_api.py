@@ -24,15 +24,7 @@ from elenchos.web.jobs import job_manager
 @pytest.fixture
 def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
-    settings = ElenchosSettings(
-        data_dir=tmp_path,
-        ollama_base_url=None,
-        ollama_api_key=None,
-        lmstudio_base_url=None,
-        lmstudio_api_key=None,
-        openrouter_base_url=None,
-        openrouter_api_key=None,
-    )
+    settings = ElenchosSettings(data_dir=tmp_path)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as client:

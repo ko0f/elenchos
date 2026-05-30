@@ -248,7 +248,6 @@ def test_build_judge_context_requires_openrouter_api_key(
 
     monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("ELENCHOS_OPENROUTER_API_KEY", raising=False)
 
     with pytest.raises(CompareError, match="requires an API key"):
         _build_judge_context("openrouter/anthropic/claude-opus-4.8")
