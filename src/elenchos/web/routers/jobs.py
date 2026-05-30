@@ -37,10 +37,21 @@ async def stream_job_events(job_id: str) -> EventSourceResponse:
                     "data": json.dumps(progress_event.data),
                 }
 
-            if job.status in ("done", "error"):
+            if job.status == "error":
+                yield {
+                    "event": "job_error",
+                    "data": json.dumps({"detail": job.error or "Job failed"}),
+                }
                 break
 
-            job_manager.wait_for_progress(job_id, seen=seen, timeout=30.0)
-            await asyncio.sleep(0)
+            if job.status == "done":
+                break
+
+            await asyncio.to_thread(
+                job_manager.wait_for_progress,
+                job_id,
+                seen=seen,
+                timeout=30.0,
+            )
 
     return EventSourceResponse(event_generator())

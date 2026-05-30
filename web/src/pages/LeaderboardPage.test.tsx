@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LeaderboardPage } from "./LeaderboardPage";
 
 const runs = [
@@ -73,6 +73,10 @@ function renderPage() {
 }
 
 describe("LeaderboardPage", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders leaderboard rows after generation", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -97,5 +101,23 @@ describe("LeaderboardPage", () => {
     expect(leaderboard).toHaveTextContent("ollama/a");
     expect(leaderboard).toHaveTextContent("run-a");
     expect(leaderboard).toHaveTextContent("1.00");
+  });
+
+  it("shows error when export fails", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByLabelText("Select run-a"));
+    await user.click(await screen.findByLabelText("Select run-b"));
+    await user.click(await screen.findByRole("button", { name: "Generate leaderboard" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("table", { name: "Leaderboard results" })).toBeInTheDocument();
+    });
+
+    buildReport.mockRejectedValueOnce(new Error("Export failed"));
+    await user.click(screen.getByRole("button", { name: "Export MD" }));
+
+    expect(await screen.findByText("Export failed")).toBeInTheDocument();
   });
 });

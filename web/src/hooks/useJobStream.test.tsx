@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { useJobStream } from "./useJobStream";
 
@@ -46,12 +46,13 @@ class MockEventSource {
 }
 
 function StreamProbe({ jobId }: { jobId: string }) {
-  const { events, status, runId, summary } = useJobStream(jobId);
+  const { events, status, runId, summary, error } = useJobStream(jobId);
   return (
     <div>
       <div data-testid="status">{status}</div>
       <div data-testid="run-id">{runId ?? ""}</div>
       <div data-testid="summary">{summary ? "yes" : "no"}</div>
+      <div data-testid="error">{error ?? ""}</div>
       <ul>
         {events.map((item, index) => (
           <li key={`${item.event}-${index}`}>{item.event}</li>
@@ -69,6 +70,7 @@ describe("useJobStream", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
   });
 
@@ -104,5 +106,22 @@ describe("useJobStream", () => {
     expect(screen.getByText("run_started")).toBeInTheDocument();
     expect(screen.getAllByText("task_done")).toHaveLength(2);
     expect(screen.getByText("run_finished")).toBeInTheDocument();
+  });
+
+  it("transitions to error on job_error event", async () => {
+    render(<StreamProbe jobId="job-err" />);
+
+    const source = await waitFor(() => {
+      expect(MockEventSource.instances.length).toBe(1);
+      return MockEventSource.instances[0];
+    });
+
+    source.onopen?.();
+    source.emit("job_error", { detail: "Provider unhealthy" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("error");
+    });
+    expect(screen.getByTestId("error")).toHaveTextContent("Provider unhealthy");
   });
 });

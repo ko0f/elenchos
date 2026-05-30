@@ -156,7 +156,7 @@ def get_run(run_id: str, settings: SettingsDep) -> RunDetailResponse:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
 
     run_dir, run = found
-    results = load_results(run_dir, include_output=True)
+    results = load_results(run_dir, include_output=False)
     return RunDetailResponse(
         run=run_metadata_from_domain(run),
         results=[result_from_domain(result) for result in results],

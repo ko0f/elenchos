@@ -58,6 +58,19 @@ def test_api_still_json_with_ui_mounted(static_dir: Path):
     assert response.json() == {"status": "ok", "version": __version__}
 
 
+def test_static_traversal_rejected(static_dir: Path):
+    outside = static_dir.parent / "outside_web_secret"
+    outside.mkdir(exist_ok=True)
+    (outside / "secret.txt").write_text("top-secret-data", encoding="utf-8")
+
+    client = TestClient(create_app(static_dir=static_dir, enable_dev_cors=False))
+
+    response = client.get("/../outside_web_secret/secret.txt")
+    assert response.status_code == 200
+    assert "top-secret-data" not in response.text
+    assert 'id="root"' in response.text
+
+
 def test_dev_cors_enabled_without_ui():
     client = TestClient(create_app(static_dir=Path("/nonexistent"), enable_dev_cors=True))
 

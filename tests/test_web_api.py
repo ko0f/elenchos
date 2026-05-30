@@ -183,7 +183,7 @@ def test_list_and_get_run(seeded_run):
     assert payload["run"]["summary"]["mean_score"] == 1.0
     assert len(payload["results"]) == 1
     assert payload["results"][0]["task_id"] == "arithmetic"
-    assert payload["results"][0]["output"] == "4"
+    assert payload["results"][0].get("output") is None
     assert payload["results"][0]["score"] == 1.0
 
 
@@ -386,7 +386,11 @@ def test_post_prompt_persists_run(mock_get_provider, api_client):
     run_id = payload["run_id"]
     detail = client.get(f"/api/runs/{run_id}")
     assert detail.status_code == 200
-    assert detail.json()["results"][0]["output"] == "hello"
+    assert detail.json()["results"][0].get("output") is None
+
+    output_response = client.get(f"/api/runs/{run_id}/results/prompt/output")
+    assert output_response.status_code == 200
+    assert output_response.text == "hello"
 
 
 def _seed_compare_run(client_settings, *, suffix: str, output: str):
@@ -550,6 +554,95 @@ def test_post_report_json(api_client):
     assert payload["benchmark_id"] == "text-reasoning-v1"
     assert len(payload["runs"]) == 2
     assert payload["runs"][0]["mean_score"] == 1.0
+
+
+@patch("elenchos.web.jobs.run_suite")
+def test_post_run_job_records_error(mock_run_suite, api_client):
+    client, _settings = api_client
+    from elenchos.runner import SuiteRunError
+
+    mock_run_suite.side_effect = SuiteRunError("Provider unhealthy")
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "benchmark": "text-reasoning-v1",
+            "model": "ollama/llama3.1:8b",
+        },
+    )
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+
+    for _ in range(50):
+        job = job_manager.get(job_id)
+        if job is not None and job.status == "error":
+            break
+        time.sleep(0.05)
+
+    job = job_manager.get(job_id)
+    assert job is not None
+    assert job.status == "error"
+    assert job.error == "Provider unhealthy"
+
+
+@patch("elenchos.web.jobs.compare_runs")
+def test_post_compare_accepts_mixed_case_mode(mock_compare_runs, api_client):
+    client, settings = api_client
+    run_a = _seed_compare_run((client, settings), suffix="a", output="4")
+    run_b = _seed_compare_run((client, settings), suffix="b", output="four")
+
+    def fake_compare_runs(run_ids, *, mode=None, on_event=None, **kwargs):
+        assert mode == "pairwise"
+        from elenchos.compare import ComparisonArtifact, TaskComparison
+        from elenchos.storage import save_comparison
+
+        artifact = ComparisonArtifact(
+            comparison_id="abc123",
+            mode="pairwise",
+            judge_model="mock/judge",
+            benchmark_id="text-reasoning-v1",
+            started_at="2025-01-01T00:00:00+00:00",
+            finished_at="2025-01-01T00:00:01+00:00",
+            runs=[
+                {"run_id": run_a.run_id, "model": run_a.model},
+                {"run_id": run_b.run_id, "model": run_b.model},
+            ],
+            tasks=[
+                TaskComparison(
+                    task_id="arithmetic",
+                    prompt="What is 2+2?",
+                    winner_run_id=run_a.run_id,
+                    rationale="A is correct",
+                    scores={},
+                )
+            ],
+            summary={
+                "task_count": 1,
+                "wins": {run_a.run_id: 1, run_b.run_id: 0},
+                "ties": 0,
+                "win_rate": {run_a.run_id: 1.0, run_b.run_id: 0.0},
+            },
+        )
+        if on_event is not None:
+            on_event("compare_started", {"comparison_id": "abc123", "task_count": 1})
+            on_event(
+                "compare_finished",
+                {"comparison_id": "abc123", "summary": artifact.summary},
+            )
+        comp_dir = save_comparison(artifact, settings=settings)
+        return artifact, comp_dir
+
+    mock_compare_runs.side_effect = fake_compare_runs
+
+    response = client.post(
+        "/api/compare",
+        json={
+            "run_ids": [run_a.run_id, run_b.run_id],
+            "mode": "Pairwise",
+            "judge": "mock/judge",
+        },
+    )
+    assert response.status_code == 202
 
 
 def test_post_report_md(api_client):

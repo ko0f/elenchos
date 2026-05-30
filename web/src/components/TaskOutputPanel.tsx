@@ -10,11 +10,13 @@ interface TaskOutputPanelProps {
 }
 
 export function TaskOutputPanel({ runId, result }: TaskOutputPanelProps) {
-  const { data: output, isLoading, isError, error } = useQuery({
+  const inlineOutput = result.output ?? null;
+  const { data: fetchedOutput, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.taskOutput(runId, result.task_id),
     queryFn: () => api.getTaskOutput(runId, result.task_id),
-    enabled: !result.error,
+    enabled: !result.error && inlineOutput == null,
   });
+  const output = inlineOutput ?? fetchedOutput ?? null;
 
   return (
     <div className="output-panel">
@@ -27,6 +29,11 @@ export function TaskOutputPanel({ runId, result }: TaskOutputPanelProps) {
 
       {result.error ? (
         <p className="output-panel__error">{result.error}</p>
+      ) : inlineOutput != null ? (
+        <section>
+          <h4 className="output-panel__section-title">Output</h4>
+          <pre className="output-panel__block">{inlineOutput}</pre>
+        </section>
       ) : isLoading ? (
         <p className="output-panel__loading">Loading output…</p>
       ) : isError ? (

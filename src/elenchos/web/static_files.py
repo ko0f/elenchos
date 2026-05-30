@@ -18,6 +18,16 @@ def has_built_ui(static_dir: Path | None = None) -> bool:
     return (root / "index.html").is_file()
 
 
+def _safe_static_file(root: Path, full_path: str) -> Path | None:
+    if not full_path:
+        return None
+    candidate = (root / full_path).resolve()
+    root_resolved = root.resolve()
+    if not candidate.is_relative_to(root_resolved):
+        return None
+    return candidate if candidate.is_file() else None
+
+
 def mount_ui(app: FastAPI, static_dir: Path | None = None) -> bool:
     """Mount built SPA assets. Returns True when static files are available."""
     root = static_dir or static_root()
@@ -33,10 +43,9 @@ def mount_ui(app: FastAPI, static_dir: Path | None = None) -> bool:
     async def spa(full_path: str) -> FileResponse:
         if full_path.startswith("api"):
             raise HTTPException(status_code=404, detail="Not Found")
-        if full_path:
-            candidate = root / full_path
-            if candidate.is_file():
-                return FileResponse(candidate)
+        safe = _safe_static_file(root, full_path)
+        if safe is not None:
+            return FileResponse(safe)
         return FileResponse(index)
 
     return True

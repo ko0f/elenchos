@@ -55,14 +55,19 @@ export function LeaderboardPage() {
     if (!canGenerate) {
       return;
     }
-    const payload = await api.buildReport({ run_ids: selected, format });
-    if (typeof payload === "string") {
-      const mime =
-        format === "md" ? "text/markdown" : format === "csv" ? "text/csv" : "application/json";
-      downloadExport(`leaderboard.${format}`, payload, mime);
-      return;
+    setError(null);
+    try {
+      const payload = await api.buildReport({ run_ids: selected, format });
+      if (typeof payload === "string") {
+        const mime =
+          format === "md" ? "text/markdown" : format === "csv" ? "text/csv" : "application/json";
+        downloadExport(`leaderboard.${format}`, payload, mime);
+        return;
+      }
+      downloadExport("leaderboard.json", JSON.stringify(payload, null, 2), "application/json");
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Export failed");
     }
-    downloadExport("leaderboard.json", JSON.stringify(payload, null, 2), "application/json");
   }
 
   if (isLoading) {

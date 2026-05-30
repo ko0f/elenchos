@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import { CompareProgress } from "../components/CompareProgress";
+import { canCompareRuns } from "../lib/runs";
 import "../components/RunLauncher.css";
 import "./ComparePage.css";
 
@@ -25,8 +26,10 @@ export function ComparePage() {
   });
 
   const selectedRuns = runs.filter((run) => initialRuns.includes(run.run_id));
+  const compareValid = canCompareRuns(initialRuns, runs);
   const canSubmit =
     initialRuns.length >= 2 &&
+    compareValid &&
     judge.trim().length > 0 &&
     (mode !== "pairwise" || initialRuns.length === 2) &&
     !submitting &&
@@ -63,6 +66,15 @@ export function ComparePage() {
     return (
       <div className="page-state page-state--error">
         Select at least two runs from <Link to="/runs">Runs</Link> to compare.
+      </div>
+    );
+  }
+
+  if (!compareValid) {
+    return (
+      <div className="page-state page-state--error">
+        Compare needs 2+ runs from the same benchmark.{" "}
+        <Link to="/runs">Back to Runs</Link>
       </div>
     );
   }

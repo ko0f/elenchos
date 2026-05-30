@@ -43,7 +43,7 @@ def create_compare_endpoint(
         job = job_manager.enqueue_compare(
             request.run_ids,
             settings=settings,
-            mode=request.mode,
+            mode=mode,
             judge_model=request.judge,
         )
     except CompareError as exc:

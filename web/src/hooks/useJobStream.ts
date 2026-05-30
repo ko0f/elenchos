@@ -65,6 +65,7 @@ export function useJobStream(jobId: string | null): JobStreamState {
 
     seenRef.current = 0;
     let cancelled = false;
+    let settled = false;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let source: EventSource | null = null;
 
@@ -94,11 +95,12 @@ export function useJobStream(jobId: string | null): JobStreamState {
     };
 
     const finish = (status: JobStreamStatus, error: string | null = null) => {
+      settled = true;
       setState((prev) => ({ ...prev, status, error: error ?? prev.error }));
     };
 
     const startPolling = () => {
-      if (pollTimer) {
+      if (pollTimer || settled) {
         return;
       }
       setState((prev) => ({ ...prev, status: "polling" }));
@@ -182,6 +184,15 @@ export function useJobStream(jobId: string | null): JobStreamState {
       source.addEventListener("compare_finished", (message: MessageEvent) => {
         handleNamedEvent("compare_finished")(message);
         finish("done");
+        source?.close();
+      });
+
+      source.addEventListener("job_error", (message: MessageEvent) => {
+        const data = parseEventData(message.data);
+        const detail =
+          typeof data.detail === "string" ? data.detail : "Job failed";
+        appendEvents([{ event: "job_error", data }]);
+        finish("error", detail);
         source?.close();
       });
 
