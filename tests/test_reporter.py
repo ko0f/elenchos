@@ -96,7 +96,7 @@ def test_format_report_matches_fixture(tmp_path: Path, monkeypatch):
     report = build_leaderboard([run_a, run_b])
     payload = format_report_json(report)
     assert '"benchmark_id": "tiny-text"' in payload
-    assert '"mean_score": 0.75' in payload or '"mean_score": 0.7500' not in payload
+    assert '"mean_score": 0.75' in payload
 
     csv_text = format_report_csv(report)
     assert "rank,run_id,model,mean_score" in csv_text

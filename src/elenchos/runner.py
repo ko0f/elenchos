@@ -29,6 +29,7 @@ from elenchos.models import (
 )
 from elenchos.providers.base import GenerationParams, Message, Provider
 from elenchos.providers.registry import get_provider
+from elenchos.reporter import _score_style
 from elenchos.scoring.deterministic import score_task_output
 from elenchos.scoring.judge import JudgeContext
 from elenchos.storage import (
@@ -284,12 +285,8 @@ def _print_task_outcome(label: str, result: Result) -> None:
         return
     if result.score is None:
         return
-    if result.score >= 1.0:
-        console.print(f"[green]{label}[/green] score={result.score:.2f}")
-    elif result.score > 0:
-        console.print(f"[yellow]{label}[/yellow] score={result.score:.2f}")
-    else:
-        console.print(f"[red]{label}[/red] score={result.score:.2f}")
+    style = _score_style(result.score)
+    console.print(f"[{style}]{label}[/{style}] score={result.score:.2f}")
 
 
 def _execute_tasks(
@@ -313,6 +310,25 @@ def _execute_tasks(
     write_lock = threading.Lock()
     new_results: list[Result] = []
 
+    def run_one(task: Task) -> Result:
+        return _run_task(
+            provider=provider,
+            model_name=model_name,
+            params=params,
+            suite=suite,
+            task=task,
+            allow_code_exec=allow_code_exec,
+            judge=judge_ctx,
+            max_retries=max_retries,
+        )
+
+    def record(label: str, result: Result) -> None:
+        with write_lock:
+            result = _persist_result(run_dir, result)
+        new_results.append(result)
+        if show_progress:
+            _print_task_outcome(label, result)
+
     if concurrency <= 1:
         for index, task in enumerate(pending_tasks, start=1):
             absolute_index = task_index_offset + index
@@ -321,41 +337,16 @@ def _execute_tasks(
                 console.status(label) if show_progress else contextlib.nullcontext()
             )
             with status:
-                result = _run_task(
-                    provider=provider,
-                    model_name=model_name,
-                    params=params,
-                    suite=suite,
-                    task=task,
-                    allow_code_exec=allow_code_exec,
-                    judge=judge_ctx,
-                    max_retries=max_retries,
-                )
-                with write_lock:
-                    result = _persist_result(run_dir, result)
-            new_results.append(result)
-            if show_progress:
-                _print_task_outcome(label, result)
+                result = run_one(task)
+            record(label, result)
         return new_results
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         future_to_task = {
-            executor.submit(
-                _run_task,
-                provider=provider,
-                model_name=model_name,
-                params=params,
-                suite=suite,
-                task=task,
-                allow_code_exec=allow_code_exec,
-                judge=judge_ctx,
-                max_retries=max_retries,
-            ): task
-            for task in pending_tasks
+            executor.submit(run_one, task): task for task in pending_tasks
         }
         for future in as_completed(future_to_task):
             task = future_to_task[future]
-            label = task.id
             try:
                 result = future.result()
             except Exception as exc:
@@ -366,11 +357,7 @@ def _execute_tasks(
                     latency_ms=0.0,
                     error=str(exc),
                 )
-            with write_lock:
-                result = _persist_result(run_dir, result)
-            new_results.append(result)
-            if show_progress:
-                _print_task_outcome(label, result)
+            record(task.id, result)
 
     return new_results
 

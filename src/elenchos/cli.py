@@ -520,17 +520,8 @@ def report(
     ] = None,
 ) -> None:
     """Generate a multi-model leaderboard from benchmark runs."""
-    if not run_ids:
-        console.print("[red]report requires at least one --runs id[/red]")
-        raise typer.Exit(code=1)
-
     try:
         leaderboard = build_leaderboard(run_ids)
-    except ReportError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1) from exc
-
-    try:
         rendered = format_report(leaderboard, fmt)
     except ReportError as exc:
         console.print(f"[red]{exc}[/red]")

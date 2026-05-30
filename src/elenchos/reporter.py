@@ -12,7 +12,7 @@ from rich.table import Table
 from elenchos.console import console
 from elenchos.metrics import aggregate_run_summary
 from elenchos.models import Result, Run
-from elenchos.storage import find_run, load_results
+from elenchos.storage import list_runs, load_results, runs_root
 
 
 class ReportError(ValueError):
@@ -36,6 +36,10 @@ class LeaderboardRow:
 class LeaderboardReport:
     benchmark_id: str | None
     rows: list[LeaderboardRow]
+
+    @property
+    def has_win_rate(self) -> bool:
+        return any(row.win_rate is not None for row in self.rows)
 
     def to_dict(self) -> dict:
         return {
@@ -68,11 +72,13 @@ def build_leaderboard(
     rows: list[LeaderboardRow] = []
     benchmark_ids: set[str | None] = set()
 
+    root = runs_root()
+    runs_by_id = {run.run_id: run for run in list_runs()}
     for run_id in run_ids:
-        found = find_run(run_id)
-        if found is None:
+        run = runs_by_id.get(run_id)
+        if run is None or run.dir_name is None:
             raise ReportError(f"Run not found: {run_id}")
-        run_dir, run = found
+        run_dir = root / run.dir_name
         results = load_results(run_dir, include_output=False)
         summary = run.summary or aggregate_run_summary(results)
         benchmark_id = run.benchmark.id if run.benchmark else None
@@ -114,13 +120,33 @@ def build_leaderboard(
     )
 
 
+def _display_cells(
+    row: LeaderboardRow, *, include_run_id: bool, has_win_rate: bool
+) -> list[str]:
+    """Format a row for human-facing output (Markdown table and Rich table)."""
+    cells = [
+        str(row.rank) if row.rank is not None else "—",
+        row.model,
+    ]
+    if include_run_id:
+        cells.append(row.run_id)
+    cells.append(f"{row.mean_score:.2f}" if row.mean_score is not None else "—")
+    cells.append(f"{row.pass_rate * 100:.0f}%" if row.pass_rate is not None else "—")
+    cells.append(
+        f"{row.p95_latency_ms:.0f} ms" if row.p95_latency_ms is not None else "—"
+    )
+    if has_win_rate:
+        cells.append(f"{row.win_rate * 100:.0f}%" if row.win_rate is not None else "—")
+    return cells
+
+
 def format_report_md(report: LeaderboardReport) -> str:
     lines = ["# Benchmark Report", ""]
     if report.benchmark_id:
         lines.append(f"**Benchmark:** {report.benchmark_id}")
         lines.append("")
 
-    has_win_rate = any(row.win_rate is not None for row in report.rows)
+    has_win_rate = report.has_win_rate
     headers = ["Rank", "Model", "Mean Score", "Pass Rate", "P95 Latency"]
     if has_win_rate:
         headers.append("Win Rate")
@@ -128,19 +154,7 @@ def format_report_md(report: LeaderboardReport) -> str:
     lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
 
     for row in report.rows:
-        cells = [
-            str(row.rank) if row.rank is not None else "—",
-            row.model,
-            f"{row.mean_score:.2f}" if row.mean_score is not None else "—",
-            f"{row.pass_rate * 100:.0f}%" if row.pass_rate is not None else "—",
-            f"{row.p95_latency_ms:.0f} ms" if row.p95_latency_ms is not None else "—",
-        ]
-        if has_win_rate:
-            cells.append(
-                f"{row.win_rate * 100:.0f}%"
-                if row.win_rate is not None
-                else "—"
-            )
+        cells = _display_cells(row, include_run_id=False, has_win_rate=has_win_rate)
         lines.append("| " + " | ".join(cells) + " |")
 
     return "\n".join(lines) + "\n"
@@ -157,7 +171,7 @@ def format_report_csv(report: LeaderboardReport) -> str:
         "p95_latency_ms",
         "task_count",
     ]
-    if any(row.win_rate is not None for row in report.rows):
+    if report.has_win_rate:
         fieldnames.append("win_rate")
 
     writer = csv.DictWriter(buffer, fieldnames=fieldnames)
@@ -216,31 +230,12 @@ def render_leaderboard_report(report: LeaderboardReport) -> None:
     table.add_column("Mean Score", justify="right")
     table.add_column("Pass Rate", justify="right")
     table.add_column("P95 Latency", justify="right")
-    has_win_rate = any(row.win_rate is not None for row in report.rows)
+    has_win_rate = report.has_win_rate
     if has_win_rate:
         table.add_column("Win Rate", justify="right")
 
     for row in report.rows:
-        rank = str(row.rank) if row.rank is not None else "—"
-        mean = f"{row.mean_score:.2f}" if row.mean_score is not None else "—"
-        pass_rate = (
-            f"{row.pass_rate * 100:.0f}%"
-            if row.pass_rate is not None
-            else "—"
-        )
-        p95 = (
-            f"{row.p95_latency_ms:.0f} ms"
-            if row.p95_latency_ms is not None
-            else "—"
-        )
-        cells = [rank, row.model, row.run_id, mean, pass_rate, p95]
-        if has_win_rate:
-            win_rate = (
-                f"{row.win_rate * 100:.0f}%"
-                if row.win_rate is not None
-                else "—"
-            )
-            cells.append(win_rate)
+        cells = _display_cells(row, include_run_id=True, has_win_rate=has_win_rate)
         table.add_row(*cells)
 
     console.print(table)
