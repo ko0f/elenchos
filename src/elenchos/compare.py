@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -11,15 +12,15 @@ from pathlib import Path
 from typing import Any
 
 from elenchos.config import BUILTIN_PROVIDERS, ElenchosSettings, resolve_judge_config
+from elenchos.console import console
 from elenchos.models import Result, Run, judge_generation_params, parse_model_id
 from elenchos.providers.registry import get_provider
 from elenchos.scoring.judge import (
     JudgeContext,
     JudgeProviderError,
-    judge_rubric,
+    judge_listwise,
     pairwise_winner,
 )
-from elenchos.console import console
 from elenchos.storage import find_run, load_results, save_comparison
 
 logger = logging.getLogger(__name__)
@@ -408,6 +409,28 @@ def _compare_pairwise(
     return tasks, summary
 
 
+_GENERIC_RUBRIC = (
+    "Judge the overall quality of the model output. Weigh, in priority order: "
+    "(1) correctness on every stated requirement and edge case, (2) algorithmic "
+    "efficiency and appropriate complexity, (3) robustness and input handling, "
+    "(4) clarity and conciseness, penalizing extraneous prose, dead code, or "
+    "ignored instructions such as 'respond with code only'. Do not reward output "
+    "just because it looks plausible or appears to run. Reserve top marks for "
+    "output that is correct, efficient, and clean with no notable flaws, and name "
+    "every concrete flaw you find in the rationale."
+)
+
+
+def _resolve_rubric(suite, task_id: str) -> tuple[str, Any]:
+    """Return (rubric_text, suite_task) for a task, falling back to generic."""
+    suite_task = next((task for task in suite.tasks if task.id == task_id), None)
+    if suite_task:
+        for scorer in suite.effective_scoring(suite_task):
+            if scorer.type == "judge_rubric":
+                return scorer.rubric, suite_task
+    return _GENERIC_RUBRIC, suite_task
+
+
 def _compare_rubric(
     entries: list[tuple[Path, Run, list[Result]]],
     task_ids: list[str],
@@ -426,57 +449,54 @@ def _compare_rubric(
     }
 
     for index, task_id in enumerate(task_ids, start=1):
-        suite_task = next((task for task in suite.tasks if task.id == task_id), None)
-        rubric_scorer = None
-        if suite_task:
-            for scorer in suite.effective_scoring(suite_task):
-                if scorer.type == "judge_rubric":
-                    rubric_scorer = scorer
-                    break
-
-        rubric = (
-            rubric_scorer.rubric
-            if rubric_scorer
-            else "Score quality from 1 (poor) to 5 (excellent)."
-        )
-        if rubric_scorer is None and index == 1:
+        rubric, suite_task = _resolve_rubric(suite, task_id)
+        if rubric is _GENERIC_RUBRIC and index == 1:
             _compare_note(
                 "benchmark has no judge_rubric scorer; using generic quality rubric"
             )
 
-        scores: dict[str, float] = {}
-        best_run_id: str | None = None
-        best_score = -1.0
+        # Shuffle output order per task so the judge can't anchor on run order;
+        # seed by task_id to keep comparisons reproducible.
+        ordered = [
+            (run, _results_by_task(results)[task_id])
+            for _, run, results in entries
+        ]
+        random.Random(task_id).shuffle(ordered)
+        prompt = next(
+            (res.prompt for _, res in ordered if res.prompt),
+            suite_task.prompt if suite_task else "",
+        )
 
-        for _, run, results in entries:
-            result = _results_by_task(results)[task_id]
-            prompt = result.prompt or (suite_task.prompt if suite_task else "")
-            score_context = f"task={task_id} run={run.run_id}"
-            _emit_event(
-                on_event,
-                "judge_call",
-                {
-                    "task_id": task_id,
-                    "index": index,
-                    "total": len(task_ids),
-                    "run_id": run.run_id,
-                    "model": run.model,
-                },
+        _emit_event(
+            on_event,
+            "judge_call",
+            {
+                "task_id": task_id,
+                "index": index,
+                "total": len(task_ids),
+                "run_id": ", ".join(run.run_id for run, _ in ordered),
+                "model": ", ".join(run.model for run, _ in ordered),
+            },
+        )
+        try:
+            items = judge_listwise(
+                judge,
+                prompt=prompt or "",
+                outputs=[_output_text(res) for _, res in ordered],
+                rubric=rubric,
+                strict=True,
+                context=f"task={task_id}",
             )
-            try:
-                outcome = judge_rubric(
-                    judge,
-                    prompt=prompt,
-                    output=_output_text(result),
-                    rubric=rubric,
-                    strict=True,
-                    context=score_context,
-                )
-            except JudgeProviderError as exc:
-                raise CompareError(str(exc)) from exc
-            score = outcome.score or 0.0
-            scores[run.run_id] = score
-            mean_scores[run.run_id].append(score)
+        except JudgeProviderError as exc:
+            raise CompareError(str(exc)) from exc
+
+        scores: dict[str, float] = {}
+        rationales: list[str] = []
+        for (run, _), item in zip(ordered, items):
+            scores[run.run_id] = item.score
+            mean_scores[run.run_id].append(item.score)
+            if item.rationale:
+                rationales.append(f"{run.run_id}: {item.rationale}")
             _emit_event(
                 on_event,
                 "score_done",
@@ -485,14 +505,13 @@ def _compare_rubric(
                     "index": index,
                     "total": len(task_ids),
                     "run_id": run.run_id,
-                    "score": score,
+                    "score": item.score,
                 },
             )
-            if score > best_score:
-                best_score = score
-                best_run_id = run.run_id
-            elif score == best_score:
-                best_run_id = None
+
+        best_score = max(scores.values())
+        leaders = [rid for rid, score in scores.items() if score == best_score]
+        best_run_id = leaders[0] if len(leaders) == 1 else None
 
         first_result = _results_by_task(entries[0][2])[task_id]
         tasks.append(
@@ -500,6 +519,7 @@ def _compare_rubric(
                 task_id=task_id,
                 prompt=first_result.prompt,
                 winner_run_id=best_run_id,
+                rationale=" | ".join(rationales) if rationales else None,
                 scores=scores,
             )
         )

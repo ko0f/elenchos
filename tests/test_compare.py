@@ -128,6 +128,52 @@ def test_compare_pairwise_writes_artifact(tmp_path: Path, monkeypatch):
     assert artifact.summary["win_rate"][run_a] == 1.0
 
 
+def test_compare_rubric_listwise_winner(tmp_path: Path, monkeypatch):
+    import random
+
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+    (tmp_path / "config.yaml").write_text(
+        "judge:\n  model: mock/judge\n  mode: rubric\n",
+        encoding="utf-8",
+    )
+    bench_dir = tmp_path / "benchmarks"
+    bench_dir.mkdir()
+    (bench_dir / "tiny-text.yaml").write_text(
+        "id: tiny-text\nversion: 1\ntype: text\ntasks:\n"
+        "  - id: math\n    prompt: 'What is 1+1?'\n"
+        "    scoring:\n      - type: regex_match\n        pattern: '2'\n",
+        encoding="utf-8",
+    )
+
+    run_a = _seed_run(tmp_path, suffix="a", output="answer a")
+    run_b = _seed_run(tmp_path, suffix="b", output="answer b")
+
+    # The output order is shuffled by task_id; replicate it so we know which
+    # run id ends up as listwise output 1 (and thus gets the high score).
+    order = [run_a, run_b]
+    random.Random("math").shuffle(order)
+
+    provider = MockJudgeProvider(
+        responses=[
+            '{"scores": [{"id": 1, "score": 9, "rationale": "strong"}, '
+            '{"id": 2, "score": 2, "rationale": "weak"}]}'
+        ]
+    )
+    judge = JudgeContext(provider=provider, model="judge", qualified="mock/judge")
+    monkeypatch.setattr(
+        "elenchos.compare._build_judge_context",
+        lambda *_args, **_kwargs: judge,
+    )
+
+    artifact, _ = compare_runs([run_a, run_b])
+
+    assert artifact.mode == "rubric"
+    assert provider.call_index == 1  # one listwise call for the single task
+    assert artifact.tasks[0].winner_run_id == order[0]
+    assert artifact.tasks[0].scores[order[0]] == pytest.approx(0.9)
+    assert artifact.tasks[0].scores[order[1]] == pytest.approx(0.2)
+
+
 def test_compare_requires_same_benchmark(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
     (tmp_path / "config.yaml").write_text(

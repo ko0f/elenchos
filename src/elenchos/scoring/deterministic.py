@@ -26,6 +26,7 @@ class ScoreOutcome:
     scorer: str | None
     passed: int | None = None
     total: int | None = None
+    rationale: str | None = None
 
 
 def normalize_output(text: str) -> str:

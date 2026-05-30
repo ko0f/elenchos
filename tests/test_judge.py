@@ -11,10 +11,12 @@ from elenchos.scoring.judge import (
     JudgeContext,
     JudgeParseError,
     extract_json_object,
+    judge_listwise,
     judge_rubric,
     normalize_rubric_score,
     pairwise_winner,
     parse_judge_response,
+    parse_listwise_response,
 )
 
 
@@ -168,6 +170,49 @@ def test_pairwise_conflicting_votes_is_tie(judge_ctx: JudgeContext):
         output_b="answer b",
     )
     assert winner == "tie"
+
+
+def test_parse_listwise_response_aligns_by_id():
+    text = (
+        '{"scores": [{"id": 2, "score": 3, "rationale": "weak"}, '
+        '{"id": 1, "score": 9, "rationale": "strong"}]}'
+    )
+    items = parse_listwise_response(text, 2)
+    assert items[0].score == pytest.approx(0.9)
+    assert items[0].rationale == "strong"
+    assert items[1].score == pytest.approx(0.3)
+
+
+def test_parse_listwise_response_missing_id_scored_zero():
+    items = parse_listwise_response('{"scores": [{"id": 1, "score": 8}]}', 3)
+    assert items[0].score == pytest.approx(0.8)
+    assert items[1].score == 0.0
+    assert items[2].score == 0.0
+
+
+def test_judge_listwise_discriminates(judge_ctx: JudgeContext):
+    judge_ctx.provider.responses = [
+        '{"scores": [{"id": 1, "score": 9, "rationale": "best"}, '
+        '{"id": 2, "score": 2, "rationale": "buggy"}]}'
+    ]
+    items = judge_listwise(
+        judge_ctx,
+        prompt="task",
+        outputs=["good", "bad"],
+        rubric="quality",
+    )
+    assert items[0].score > items[1].score
+
+
+def test_judge_listwise_malformed_returns_zeros(judge_ctx: JudgeContext):
+    judge_ctx.provider.responses = ["no json here"]
+    items = judge_listwise(
+        judge_ctx,
+        prompt="task",
+        outputs=["a", "b"],
+        rubric="quality",
+    )
+    assert [item.score for item in items] == [0.0, 0.0]
 
 
 def test_score_task_output_judge_rubric(judge_ctx: JudgeContext):

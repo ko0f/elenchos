@@ -38,6 +38,14 @@ class ParsedJudgeResponse:
 
 
 @dataclass(frozen=True)
+class ListwiseItem:
+    """Relative score (0-1) and rationale for one output in a listwise batch."""
+
+    score: float
+    rationale: str | None = None
+
+
+@dataclass(frozen=True)
 class JudgeContext:
     provider: Provider
     model: str
@@ -244,7 +252,98 @@ def judge_rubric(
         scorer="judge_rubric",
         passed=passed,
         total=1,
+        rationale=parsed.rationale,
     )
+
+
+_LISTWISE_MAX = 10.0
+
+
+def parse_listwise_response(text: str, count: int) -> list[ListwiseItem]:
+    """Parse a listwise judge response into ``count`` items aligned by 1-based id."""
+    payload = extract_json_object(text)
+    raw_scores = payload.get("scores")
+    if not isinstance(raw_scores, list):
+        raise JudgeParseError("listwise response missing 'scores' array")
+
+    items: list[ListwiseItem | None] = [None] * count
+    for entry in raw_scores:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            idx = int(entry["id"]) - 1
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not 0 <= idx < count:
+            continue
+        score = entry.get("score")
+        if score is None:
+            continue
+        normalized = max(0.0, min(1.0, float(score) / _LISTWISE_MAX))
+        rationale = entry.get("rationale")
+        items[idx] = ListwiseItem(
+            score=normalized,
+            rationale=str(rationale).strip() if rationale is not None else None,
+        )
+
+    if all(item is None for item in items):
+        raise JudgeParseError("listwise response scored no outputs")
+    return [item or ListwiseItem(score=0.0) for item in items]
+
+
+def judge_listwise(
+    judge: JudgeContext,
+    *,
+    prompt: str,
+    outputs: list[str],
+    rubric: str,
+    params: GenerationParams | None = None,
+    strict: bool = False,
+    context: str = "listwise",
+) -> list[ListwiseItem]:
+    """Score several outputs for one task *relative to each other* in a single call.
+
+    Outputs are presented anonymized as ``Output 1..N``; the caller is responsible
+    for shuffling order to mitigate position bias. Returns one item per input
+    output, aligned to the given order.
+    """
+    blocks = "\n\n".join(
+        f"--- Output {i} ---\n{text}" for i, text in enumerate(outputs, start=1)
+    )
+    user_content = (
+        f"Compare and score the following {len(outputs)} model outputs for the "
+        "SAME task, judging them relative to each other.\n\n"
+        f"Task prompt:\n{prompt}\n\n"
+        f"Rubric:\n{rubric}\n\n"
+        f"Outputs:\n{blocks}\n\n"
+        "Score each output on an integer scale from 1 to 10 using the FULL range. "
+        "Spread the scores to reflect real quality gaps; give two outputs the same "
+        "score only if they are genuinely indistinguishable. Respond with JSON "
+        'only: {"scores": [{"id": <output number>, "score": <1-10>, '
+        '"rationale": "<brief explanation>"}, ...]} with one entry per output.'
+    )
+
+    try:
+        raw = _call_judge(judge, user_content, params=params)
+        return parse_listwise_response(raw, len(outputs))
+    except Exception as exc:
+        if isinstance(exc, JudgeParseError):
+            logger.warning(
+                "Judge listwise parse failed (%s, model=%s): %s",
+                context,
+                judge.qualified,
+                exc,
+            )
+            return [ListwiseItem(score=0.0) for _ in outputs]
+        if not _is_provider_error(exc):
+            raise
+        message = (
+            f"Judge listwise call failed ({context}, model={judge.qualified}): {exc}"
+        )
+        logger.error(message)
+        if strict:
+            raise JudgeProviderError(message) from exc
+        return [ListwiseItem(score=0.0) for _ in outputs]
 
 
 def _single_pairwise(
