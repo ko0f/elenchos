@@ -9,6 +9,7 @@ from elenchos.config import (
     normalize_openai_base_url,
     resolve_judge_config,
     resolve_provider_endpoint,
+    resolve_run_defaults,
 )
 from elenchos.providers.registry import get_provider, list_provider_names
 
@@ -200,3 +201,17 @@ def test_resolve_judge_config_from_yaml(tmp_path: Path):
     judge = resolve_judge_config(settings=settings)
     assert judge.model == "ollama/llama3.1:8b"
     assert judge.mode == "rubric"
+
+
+def test_resolve_run_defaults_precedence(tmp_path: Path):
+    config_dir = tmp_path / "elenchos"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "defaults:\n  concurrency: 4\n  max_retries: 5\n",
+        encoding="utf-8",
+    )
+    settings = ElenchosSettings(data_dir=config_dir)
+
+    assert resolve_run_defaults(settings=settings) == (4, 5)
+    assert resolve_run_defaults(settings=settings, cli_concurrency=2) == (2, 5)
+    assert resolve_run_defaults(settings=settings, cli_max_retries=1) == (4, 1)

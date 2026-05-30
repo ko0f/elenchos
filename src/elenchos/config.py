@@ -145,6 +145,32 @@ class JudgeConfig:
     mode: str = "pairwise"
 
 
+def resolve_run_defaults(
+    *,
+    settings: ElenchosSettings | None = None,
+    cli_concurrency: int | None = None,
+    cli_max_retries: int | None = None,
+) -> tuple[int, int]:
+    """Resolve run concurrency and retry limits: CLI > config.yaml > built-ins."""
+    settings = settings or ElenchosSettings()
+    yaml_config = load_yaml_config(settings)
+    defaults = yaml_config.get("defaults") or {}
+    if not isinstance(defaults, dict):
+        defaults = {}
+
+    concurrency = (
+        cli_concurrency
+        if cli_concurrency is not None
+        else defaults.get("concurrency", 1)
+    )
+    max_retries = (
+        cli_max_retries
+        if cli_max_retries is not None
+        else defaults.get("max_retries", 3)
+    )
+    return int(concurrency), int(max_retries)
+
+
 def resolve_judge_config(
     *,
     settings: ElenchosSettings | None = None,

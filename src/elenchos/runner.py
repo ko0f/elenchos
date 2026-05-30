@@ -5,11 +5,17 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import random
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
+
 from elenchos.benchmarks.schema import BenchmarkSuite, GenerationParamsDefaults, Task
-from elenchos.config import ElenchosSettings, resolve_judge_config
+from elenchos.config import ElenchosSettings, resolve_judge_config, resolve_run_defaults
 from elenchos.console import console
 from elenchos.metrics import aggregate_run_summary
 from elenchos.models import (
@@ -21,11 +27,19 @@ from elenchos.models import (
     generation_params_to_dict,
     parse_model_id,
 )
-from elenchos.providers.base import GenerationParams, Provider
+from elenchos.providers.base import GenerationParams, Message, Provider
 from elenchos.providers.registry import get_provider
 from elenchos.scoring.deterministic import score_task_output
 from elenchos.scoring.judge import JudgeContext
-from elenchos.storage import append_result, create_run, finalize_run, save_output
+from elenchos.storage import (
+    append_result,
+    create_run,
+    finalize_run,
+    find_resumable_run,
+    load_results,
+    rewrite_results,
+    save_output,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +47,8 @@ TEXT_SCORERS = frozenset(
     {"exact_match", "regex_match", "contains_all", "judge_rubric", "metrics"}
 )
 CODING_SCORERS = frozenset({"unit_test", "metrics"})
+
+_TRANSIENT_HTTP = frozenset({408, 429, 500, 502, 503, 504})
 
 
 class SuiteRunError(ValueError):
@@ -45,6 +61,7 @@ class SuiteRunOutcome:
     run_dir: Path
     results: list[Result]
     summary: dict
+    resumed: bool = False
 
 
 def load_prompts(path: Path) -> list[PromptCase]:
@@ -89,6 +106,52 @@ def resolve_generation_params(
         seed=defaults.seed,
         stop=defaults.stop,
     )
+
+
+def is_transient_error(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _TRANSIENT_HTTP
+    return isinstance(
+        exc,
+        (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            httpx.ReadError,
+            httpx.RemoteProtocolError,
+            httpx.NetworkError,
+        ),
+    )
+
+
+def complete_with_retry(
+    provider: Provider,
+    model: str,
+    messages: list[Message],
+    params: GenerationParams,
+    *,
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+):
+    last_exc: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return provider.complete(model, messages, params)
+        except Exception as exc:
+            last_exc = exc
+            if not is_transient_error(exc) or attempt >= max_attempts - 1:
+                raise
+            delay = base_delay * (2**attempt) + random.uniform(0, 0.1)
+            logger.warning(
+                "Transient provider error (attempt %d/%d): %s; retry in %.1fs",
+                attempt + 1,
+                max_attempts,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("complete_with_retry exhausted without result")
 
 
 def _suite_needs_judge(suite: BenchmarkSuite) -> bool:
@@ -160,12 +223,19 @@ def _run_task(
     task: Task,
     allow_code_exec: bool = False,
     judge: JudgeContext | None = None,
+    max_retries: int = 3,
 ) -> Result:
     messages = build_messages(task.prompt)
     scorers = suite.effective_scoring(task)
 
     try:
-        completion = provider.complete(model_name, messages, params)
+        completion = complete_with_retry(
+            provider,
+            model_name,
+            messages,
+            params,
+            max_attempts=max_retries,
+        )
     except Exception as exc:
         logger.exception("Task %s failed", task.id)
         return Result(
@@ -197,6 +267,119 @@ def _run_task(
     )
 
 
+def _persist_result(run_dir: Path, result: Result) -> Result:
+    if result.error:
+        append_result(run_dir, result)
+        return result
+
+    output_ref = save_output(run_dir, result.task_id, result.output or "")
+    result.output_ref = output_ref
+    append_result(run_dir, result)
+    return result
+
+
+def _print_task_outcome(label: str, result: Result) -> None:
+    if result.error:
+        console.print(f"[red]{label} error:[/red] {result.error}")
+        return
+    if result.score is None:
+        return
+    if result.score >= 1.0:
+        console.print(f"[green]{label}[/green] score={result.score:.2f}")
+    elif result.score > 0:
+        console.print(f"[yellow]{label}[/yellow] score={result.score:.2f}")
+    else:
+        console.print(f"[red]{label}[/red] score={result.score:.2f}")
+
+
+def _execute_tasks(
+    *,
+    suite: BenchmarkSuite,
+    pending_tasks: list[Task],
+    provider: Provider,
+    model_name: str,
+    params: GenerationParams,
+    run_dir: Path,
+    allow_code_exec: bool,
+    judge_ctx: JudgeContext | None,
+    max_retries: int,
+    concurrency: int,
+    show_progress: bool,
+    task_index_offset: int,
+) -> list[Result]:
+    if not pending_tasks:
+        return []
+
+    write_lock = threading.Lock()
+    new_results: list[Result] = []
+
+    if concurrency <= 1:
+        for index, task in enumerate(pending_tasks, start=1):
+            absolute_index = task_index_offset + index
+            label = f"[{absolute_index}/{len(suite.tasks)}] {task.id}"
+            status = (
+                console.status(label) if show_progress else contextlib.nullcontext()
+            )
+            with status:
+                result = _run_task(
+                    provider=provider,
+                    model_name=model_name,
+                    params=params,
+                    suite=suite,
+                    task=task,
+                    allow_code_exec=allow_code_exec,
+                    judge=judge_ctx,
+                    max_retries=max_retries,
+                )
+                with write_lock:
+                    result = _persist_result(run_dir, result)
+            new_results.append(result)
+            if show_progress:
+                _print_task_outcome(label, result)
+        return new_results
+
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        future_to_task = {
+            executor.submit(
+                _run_task,
+                provider=provider,
+                model_name=model_name,
+                params=params,
+                suite=suite,
+                task=task,
+                allow_code_exec=allow_code_exec,
+                judge=judge_ctx,
+                max_retries=max_retries,
+            ): task
+            for task in pending_tasks
+        }
+        for future in as_completed(future_to_task):
+            task = future_to_task[future]
+            label = task.id
+            try:
+                result = future.result()
+            except Exception as exc:
+                logger.exception("Task %s worker failed", task.id)
+                result = Result(
+                    task_id=task.id,
+                    prompt=task.prompt,
+                    latency_ms=0.0,
+                    error=str(exc),
+                )
+            with write_lock:
+                result = _persist_result(run_dir, result)
+            new_results.append(result)
+            if show_progress:
+                _print_task_outcome(label, result)
+
+    return new_results
+
+
+def _order_results(suite: BenchmarkSuite, results: list[Result]) -> list[Result]:
+    order = {task.id: index for index, task in enumerate(suite.tasks)}
+    return sorted(results, key=lambda result: order.get(result.task_id, len(order)))
+
+
 def run_suite(
     suite: BenchmarkSuite,
     model: str,
@@ -208,9 +391,19 @@ def run_suite(
     show_progress: bool = True,
     allow_code_exec: bool = False,
     judge_model: str | None = None,
+    concurrency: int | None = None,
+    max_retries: int | None = None,
 ) -> SuiteRunOutcome:
-    """Run all tasks in a benchmark suite sequentially."""
+    """Run benchmark tasks with optional concurrency, resume, and retries."""
     settings = settings or ElenchosSettings()
+    effective_concurrency, effective_max_retries = resolve_run_defaults(
+        settings=settings,
+        cli_concurrency=concurrency,
+        cli_max_retries=max_retries,
+    )
+    if effective_concurrency < 1:
+        raise SuiteRunError("concurrency must be at least 1")
+
     try:
         judge_config = resolve_judge_config(settings=settings, cli_judge=judge_model)
     except ValueError as exc:
@@ -246,49 +439,57 @@ def run_suite(
             )
 
     benchmark = BenchmarkRef(id=suite.id, version=suite.version)
-    run_dir, run = create_run(
-        model=model_id.qualified,
+    resumed = False
+    resumable = find_resumable_run(
+        suite.id,
+        model_id.qualified,
+        version=suite.version,
         params=generation_params_to_dict(params),
-        benchmark=benchmark,
         settings=settings,
     )
-
-    results: list[Result] = []
-
-    for index, task in enumerate(suite.tasks, start=1):
-        label = f"[{index}/{len(suite.tasks)}] {task.id}"
-        status = console.status(label) if show_progress else contextlib.nullcontext()
-        with status:
-            result = _run_task(
-                provider=provider,
-                model_name=model_id.model,
-                params=params,
-                suite=suite,
-                task=task,
-                allow_code_exec=allow_code_exec,
-                judge=judge_ctx,
+    if resumable is not None:
+        run_dir, run = resumable
+        resumed = True
+        prior_results = load_results(run_dir, include_output=False)
+        existing_results = [r for r in prior_results if r.error is None]
+        completed_ids = {result.task_id for result in existing_results}
+        if len(existing_results) != len(prior_results):
+            # Drop errored rows so retried tasks don't leave stale duplicates.
+            rewrite_results(run_dir, existing_results)
+        if show_progress and completed_ids:
+            console.print(
+                f"[dim]Resuming run {run.run_id}; "
+                f"skipping {len(completed_ids)} completed task(s)[/dim]"
             )
+    else:
+        run_dir, run = create_run(
+            model=model_id.qualified,
+            params=generation_params_to_dict(params),
+            benchmark=benchmark,
+            settings=settings,
+        )
+        existing_results = []
+        completed_ids = set()
 
-        if result.error:
-            append_result(run_dir, result)
-            results.append(result)
-            if show_progress:
-                console.print(f"[red]{label} error:[/red] {result.error}")
-            continue
+    pending_tasks = [task for task in suite.tasks if task.id not in completed_ids]
+    task_index_offset = len(completed_ids)
 
-        output_ref = save_output(run_dir, task.id, result.output or "")
-        result.output_ref = output_ref
-        append_result(run_dir, result)
-        results.append(result)
+    new_results = _execute_tasks(
+        suite=suite,
+        pending_tasks=pending_tasks,
+        provider=provider,
+        model_name=model_id.model,
+        params=params,
+        run_dir=run_dir,
+        allow_code_exec=allow_code_exec,
+        judge_ctx=judge_ctx,
+        max_retries=effective_max_retries,
+        concurrency=effective_concurrency,
+        show_progress=show_progress,
+        task_index_offset=task_index_offset,
+    )
 
-        if show_progress and result.score is not None:
-            if result.score >= 1.0:
-                console.print(f"[green]{label}[/green] score={result.score:.2f}")
-            elif result.score > 0:
-                console.print(f"[yellow]{label}[/yellow] score={result.score:.2f}")
-            else:
-                console.print(f"[red]{label}[/red] score={result.score:.2f}")
-
+    results = _order_results(suite, existing_results + new_results)
     summary = aggregate_run_summary(results)
     run.summary = summary
     finalize_run(run_dir, run)
@@ -298,4 +499,5 @@ def run_suite(
         run_dir=run_dir,
         results=results,
         summary=summary,
+        resumed=resumed,
     )

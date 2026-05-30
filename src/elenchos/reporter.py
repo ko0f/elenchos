@@ -1,11 +1,249 @@
-"""Render benchmark run results to the terminal."""
+"""Render benchmark run results and multi-run reports."""
 
 from __future__ import annotations
+
+import csv
+import io
+import json
+from dataclasses import dataclass
 
 from rich.table import Table
 
 from elenchos.console import console
+from elenchos.metrics import aggregate_run_summary
 from elenchos.models import Result, Run
+from elenchos.storage import find_run, load_results
+
+
+class ReportError(ValueError):
+    """Report cannot be generated."""
+
+
+@dataclass
+class LeaderboardRow:
+    run_id: str
+    model: str
+    benchmark_id: str | None
+    mean_score: float | None
+    pass_rate: float | None
+    p95_latency_ms: float | None
+    task_count: int | None
+    rank: int | None = None
+    win_rate: float | None = None
+
+
+@dataclass
+class LeaderboardReport:
+    benchmark_id: str | None
+    rows: list[LeaderboardRow]
+
+    def to_dict(self) -> dict:
+        return {
+            "benchmark_id": self.benchmark_id,
+            "runs": [
+                {
+                    "run_id": row.run_id,
+                    "model": row.model,
+                    "benchmark_id": row.benchmark_id,
+                    "mean_score": row.mean_score,
+                    "pass_rate": row.pass_rate,
+                    "p95_latency_ms": row.p95_latency_ms,
+                    "task_count": row.task_count,
+                    "rank": row.rank,
+                    "win_rate": row.win_rate,
+                }
+                for row in self.rows
+            ],
+        }
+
+
+def build_leaderboard(
+    run_ids: list[str],
+    *,
+    win_rates: dict[str, float] | None = None,
+) -> LeaderboardReport:
+    if not run_ids:
+        raise ReportError("report requires at least one run id")
+
+    rows: list[LeaderboardRow] = []
+    benchmark_ids: set[str | None] = set()
+
+    for run_id in run_ids:
+        found = find_run(run_id)
+        if found is None:
+            raise ReportError(f"Run not found: {run_id}")
+        run_dir, run = found
+        results = load_results(run_dir, include_output=False)
+        summary = run.summary or aggregate_run_summary(results)
+        benchmark_id = run.benchmark.id if run.benchmark else None
+        benchmark_ids.add(benchmark_id)
+        rows.append(
+            LeaderboardRow(
+                run_id=run.run_id,
+                model=run.model,
+                benchmark_id=benchmark_id,
+                mean_score=summary.get("mean_score"),
+                pass_rate=summary.get("pass_rate"),
+                p95_latency_ms=summary.get("p95_latency_ms"),
+                task_count=summary.get("task_count"),
+                win_rate=(win_rates or {}).get(run.run_id),
+            )
+        )
+
+    if len(benchmark_ids) > 1:
+        raise ReportError(
+            "All runs must share the same benchmark "
+            f"(found: {sorted(benchmark_ids) or ['none']})."
+        )
+
+    ranked = sorted(
+        rows,
+        key=lambda row: (
+            row.mean_score is None,
+            -(row.mean_score or 0.0),
+            row.model,
+        ),
+    )
+    for index, row in enumerate(ranked, start=1):
+        if row.mean_score is not None:
+            row.rank = index
+
+    return LeaderboardReport(
+        benchmark_id=next(iter(benchmark_ids)) if benchmark_ids else None,
+        rows=ranked,
+    )
+
+
+def format_report_md(report: LeaderboardReport) -> str:
+    lines = ["# Benchmark Report", ""]
+    if report.benchmark_id:
+        lines.append(f"**Benchmark:** {report.benchmark_id}")
+        lines.append("")
+
+    has_win_rate = any(row.win_rate is not None for row in report.rows)
+    headers = ["Rank", "Model", "Mean Score", "Pass Rate", "P95 Latency"]
+    if has_win_rate:
+        headers.append("Win Rate")
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+
+    for row in report.rows:
+        cells = [
+            str(row.rank) if row.rank is not None else "—",
+            row.model,
+            f"{row.mean_score:.2f}" if row.mean_score is not None else "—",
+            f"{row.pass_rate * 100:.0f}%" if row.pass_rate is not None else "—",
+            f"{row.p95_latency_ms:.0f} ms" if row.p95_latency_ms is not None else "—",
+        ]
+        if has_win_rate:
+            cells.append(
+                f"{row.win_rate * 100:.0f}%"
+                if row.win_rate is not None
+                else "—"
+            )
+        lines.append("| " + " | ".join(cells) + " |")
+
+    return "\n".join(lines) + "\n"
+
+
+def format_report_csv(report: LeaderboardReport) -> str:
+    buffer = io.StringIO()
+    fieldnames = [
+        "rank",
+        "run_id",
+        "model",
+        "mean_score",
+        "pass_rate",
+        "p95_latency_ms",
+        "task_count",
+    ]
+    if any(row.win_rate is not None for row in report.rows):
+        fieldnames.append("win_rate")
+
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in report.rows:
+        payload = {
+            "rank": row.rank if row.rank is not None else "",
+            "run_id": row.run_id,
+            "model": row.model,
+            "mean_score": (
+                f"{row.mean_score:.4f}" if row.mean_score is not None else ""
+            ),
+            "pass_rate": (
+                f"{row.pass_rate:.4f}" if row.pass_rate is not None else ""
+            ),
+            "p95_latency_ms": (
+                f"{row.p95_latency_ms:.0f}"
+                if row.p95_latency_ms is not None
+                else ""
+            ),
+            "task_count": row.task_count if row.task_count is not None else "",
+        }
+        if "win_rate" in fieldnames:
+            payload["win_rate"] = (
+                f"{row.win_rate:.4f}" if row.win_rate is not None else ""
+            )
+        writer.writerow(payload)
+
+    return buffer.getvalue()
+
+
+def format_report_json(report: LeaderboardReport) -> str:
+    return json.dumps(report.to_dict(), indent=2) + "\n"
+
+
+def format_report(report: LeaderboardReport, fmt: str) -> str:
+    normalized = fmt.lower()
+    if normalized == "md":
+        return format_report_md(report)
+    if normalized == "csv":
+        return format_report_csv(report)
+    if normalized == "json":
+        return format_report_json(report)
+    raise ReportError(f"Unknown report format {fmt!r}; expected md, csv, or json.")
+
+
+def render_leaderboard_report(report: LeaderboardReport) -> None:
+    title = "Leaderboard"
+    if report.benchmark_id:
+        title = f"Leaderboard — {report.benchmark_id}"
+
+    table = Table(title=title)
+    table.add_column("Rank", justify="right")
+    table.add_column("Model")
+    table.add_column("Run ID")
+    table.add_column("Mean Score", justify="right")
+    table.add_column("Pass Rate", justify="right")
+    table.add_column("P95 Latency", justify="right")
+    has_win_rate = any(row.win_rate is not None for row in report.rows)
+    if has_win_rate:
+        table.add_column("Win Rate", justify="right")
+
+    for row in report.rows:
+        rank = str(row.rank) if row.rank is not None else "—"
+        mean = f"{row.mean_score:.2f}" if row.mean_score is not None else "—"
+        pass_rate = (
+            f"{row.pass_rate * 100:.0f}%"
+            if row.pass_rate is not None
+            else "—"
+        )
+        p95 = (
+            f"{row.p95_latency_ms:.0f} ms"
+            if row.p95_latency_ms is not None
+            else "—"
+        )
+        cells = [rank, row.model, row.run_id, mean, pass_rate, p95]
+        if has_win_rate:
+            win_rate = (
+                f"{row.win_rate * 100:.0f}%"
+                if row.win_rate is not None
+                else "—"
+            )
+            cells.append(win_rate)
+        table.add_row(*cells)
+
+    console.print(table)
 
 
 def _score_style(score: float | None) -> str:

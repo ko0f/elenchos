@@ -3,13 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx
 import pytest
 import yaml
 
 from elenchos.benchmarks.schema import BenchmarkSuite
+from elenchos.config import ElenchosSettings
 from elenchos.metrics import aggregate_run_summary
+from elenchos.models import BenchmarkRef, Result, generation_params_to_dict
 from elenchos.providers.base import Completion, GenerationParams, Message
-from elenchos.runner import SuiteRunError, run_suite
+from elenchos.runner import (
+    SuiteRunError,
+    is_transient_error,
+    resolve_generation_params,
+    run_suite,
+)
+from elenchos.storage import append_result, create_run, save_output
 
 TINY_SUITE = """\
 id: tiny-text
@@ -35,6 +44,8 @@ class MockProvider:
     name: str = "mock"
     responses: dict[str, str] = field(default_factory=dict)
     fail_prompts: set[str] = field(default_factory=set)
+    call_counts: dict[str, int] = field(default_factory=dict)
+    transient_failures: dict[str, int] = field(default_factory=dict)
 
     def list_models(self) -> list[str]:
         return ["mock-model"]
@@ -49,6 +60,13 @@ class MockProvider:
         params: GenerationParams,
     ) -> Completion:
         prompt = messages[-1].content
+        self.call_counts[prompt] = self.call_counts.get(prompt, 0) + 1
+
+        remaining = self.transient_failures.get(prompt, 0)
+        if remaining > 0:
+            self.transient_failures[prompt] = remaining - 1
+            raise httpx.TimeoutException("simulated timeout")
+
         if prompt in self.fail_prompts:
             raise RuntimeError("provider unavailable")
 
@@ -212,3 +230,170 @@ def test_aggregate_run_summary():
     assert summary["pass_rate"] == pytest.approx(1 / 3)
     assert summary["errors"] == 1
     assert summary["p95_latency_ms"] == 200.0
+
+
+def test_run_suite_resumes_partial_run(
+    tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+
+    settings = ElenchosSettings(data_dir=tmp_path)
+    run_dir, run = create_run(
+        model="mock/mock-model",
+        params=generation_params_to_dict(resolve_generation_params(tiny_suite)),
+        benchmark=BenchmarkRef(id="tiny-text", version=1),
+        settings=settings,
+    )
+    output_ref = save_output(run_dir, "math", "2")
+    append_result(
+        run_dir,
+        Result(
+            task_id="math",
+            prompt="What is 1+1? Reply with the number only.",
+            latency_ms=10.0,
+            score=1.0,
+            output_ref=output_ref,
+        ),
+    )
+
+    provider = MockProvider(
+        responses={
+            "Name the capital of Italy in one word.": "Rome",
+        }
+    )
+
+    outcome = run_suite(
+        tiny_suite,
+        "mock/mock-model",
+        provider=provider,
+        show_progress=False,
+    )
+
+    assert outcome.resumed is True
+    assert outcome.run.run_id == run.run_id
+    assert len(outcome.results) == 2
+    assert provider.call_counts.get("What is 1+1? Reply with the number only.", 0) == 0
+    assert provider.call_counts["Name the capital of Italy in one word."] == 1
+
+
+def test_run_suite_resume_retries_errored_task(
+    tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+
+    settings = ElenchosSettings(data_dir=tmp_path)
+    run_dir, run = create_run(
+        model="mock/mock-model",
+        params=generation_params_to_dict(resolve_generation_params(tiny_suite)),
+        benchmark=BenchmarkRef(id="tiny-text", version=1),
+        settings=settings,
+    )
+    output_ref = save_output(run_dir, "math", "2")
+    append_result(
+        run_dir,
+        Result(
+            task_id="math",
+            prompt="What is 1+1? Reply with the number only.",
+            latency_ms=10.0,
+            score=1.0,
+            output_ref=output_ref,
+        ),
+    )
+    append_result(
+        run_dir,
+        Result(
+            task_id="city",
+            prompt="Name the capital of Italy in one word.",
+            latency_ms=0.0,
+            error="provider unavailable",
+        ),
+    )
+
+    provider = MockProvider(
+        responses={"Name the capital of Italy in one word.": "Rome"}
+    )
+
+    outcome = run_suite(
+        tiny_suite,
+        "mock/mock-model",
+        provider=provider,
+        show_progress=False,
+    )
+
+    assert outcome.resumed is True
+    assert provider.call_counts.get("What is 1+1? Reply with the number only.", 0) == 0
+    assert provider.call_counts["Name the capital of Italy in one word."] == 1
+    assert len(outcome.results) == 2
+    city = next(result for result in outcome.results if result.task_id == "city")
+    assert city.error is None
+    assert city.score == 1.0
+    assert outcome.summary["errors"] == 0
+
+
+def test_run_suite_retries_transient_errors(
+    tiny_suite: BenchmarkSuite, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+
+    city_prompt = "Name the capital of Italy in one word."
+    provider = MockProvider(
+        responses={
+            "What is 1+1? Reply with the number only.": "2",
+            city_prompt: "Rome",
+        },
+        transient_failures={city_prompt: 2},
+    )
+
+    outcome = run_suite(
+        tiny_suite,
+        "mock/mock-model",
+        provider=provider,
+        show_progress=False,
+        max_retries=3,
+    )
+
+    assert provider.call_counts[city_prompt] == 3
+    assert outcome.results[1].score == 1.0
+    assert outcome.summary["errors"] == 0
+
+
+def test_run_suite_concurrency(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+    suite = BenchmarkSuite.model_validate(
+        {
+            "id": "parallel",
+            "version": 1,
+            "type": "text",
+            "tasks": [
+                {
+                    "id": f"t{i}",
+                    "prompt": f"prompt-{i}",
+                    "scoring": [{"type": "exact_match", "expected": "ok"}],
+                }
+                for i in range(4)
+            ],
+        }
+    )
+    provider = MockProvider(
+        responses={f"prompt-{i}": "ok" for i in range(4)},
+    )
+
+    outcome = run_suite(
+        suite,
+        "mock/mock-model",
+        provider=provider,
+        show_progress=False,
+        concurrency=4,
+    )
+
+    assert len(outcome.results) == 4
+    assert all(result.score == 1.0 for result in outcome.results)
+
+
+def test_is_transient_error():
+    response = httpx.Response(503, request=httpx.Request("POST", "http://test"))
+    assert is_transient_error(
+        httpx.HTTPStatusError("fail", request=response.request, response=response)
+    )
+    assert is_transient_error(httpx.TimeoutException("timeout"))
+    assert not is_transient_error(RuntimeError("model not found"))

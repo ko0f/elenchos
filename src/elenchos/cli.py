@@ -24,7 +24,14 @@ from elenchos.models import (
     parse_model_id,
 )
 from elenchos.providers import get_provider, list_provider_names
-from elenchos.reporter import render_comparison_report, render_run_report
+from elenchos.reporter import (
+    ReportError,
+    build_leaderboard,
+    format_report,
+    render_comparison_report,
+    render_leaderboard_report,
+    render_run_report,
+)
 from elenchos.runner import SuiteRunError, run_suite
 from elenchos.storage import (
     DEFAULT_TASK_ID,
@@ -416,6 +423,14 @@ def run(
             help="Judge model for judge_rubric scoring (provider/model)",
         ),
     ] = None,
+    concurrency: Annotated[
+        int | None,
+        typer.Option(
+            "--concurrency",
+            min=1,
+            help="Max concurrent tasks (default from config or 1)",
+        ),
+    ] = None,
 ) -> None:
     """Run a benchmark suite against a model."""
     try:
@@ -435,6 +450,7 @@ def run(
             max_tokens=max_tokens,
             allow_code_exec=allow_code_exec,
             judge_model=judge,
+            concurrency=concurrency,
         )
     except SuiteRunError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -479,6 +495,54 @@ def compare(
     render_comparison_report(artifact)
     if comp_dir is not None:
         console.print(f"[dim]Comparison saved to {comp_dir}[/dim]")
+
+
+@app.command()
+def report(
+    run_ids: Annotated[
+        list[str],
+        typer.Option("--runs", help="Run ids to include in the leaderboard"),
+    ],
+    fmt: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="Output format: md, csv, or json",
+        ),
+    ] = "md",
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Write report to this file instead of stdout",
+        ),
+    ] = None,
+) -> None:
+    """Generate a multi-model leaderboard from benchmark runs."""
+    if not run_ids:
+        console.print("[red]report requires at least one --runs id[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        leaderboard = build_leaderboard(run_ids)
+    except ReportError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    try:
+        rendered = format_report(leaderboard, fmt)
+    except ReportError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if output is not None:
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"[dim]Report written to {output}[/dim]")
+    elif fmt == "md":
+        render_leaderboard_report(leaderboard)
+    else:
+        console.print(rendered, markup=False, highlight=False, soft_wrap=True, end="")
 
 
 def main() -> None:

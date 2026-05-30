@@ -205,6 +205,43 @@ def save_comparison(
     return comp_dir
 
 
+def rewrite_results(run_dir: Path, results: list[Result]) -> None:
+    """Atomically rewrite ``results.jsonl`` to contain exactly ``results``."""
+    path = run_dir / "results.jsonl"
+    tmp = path.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
+        for result in results:
+            handle.write(json.dumps(result.to_dict(), ensure_ascii=False))
+            handle.write("\n")
+    tmp.replace(path)
+
+
+def find_resumable_run(
+    benchmark_id: str,
+    model: str,
+    *,
+    version: int | None = None,
+    params: dict | None = None,
+    settings: ElenchosSettings | None = None,
+) -> tuple[Path, Run] | None:
+    """Find the most recent incomplete run matching benchmark/model/version/params."""
+    root = runs_root(settings)
+    for run in list_runs(settings):
+        if run.finished_at is not None:
+            continue
+        if run.benchmark is None or run.benchmark.id != benchmark_id:
+            continue
+        if version is not None and run.benchmark.version != version:
+            continue
+        if run.model != model:
+            continue
+        if params is not None and run.params != params:
+            continue
+        if run.dir_name is not None:
+            return root / run.dir_name, run
+    return None
+
+
 def find_run(
     run_id: str,
     settings: ElenchosSettings | None = None,
