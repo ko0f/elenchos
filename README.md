@@ -201,10 +201,13 @@ uv run elenchos serve          # http://127.0.0.1:8765
 
 **Terminal 2 — frontend**
 
+Icons use local Font Awesome (see `web/vendor/README.md`):
+
 ```bash
+ln -sfn /Users/tal/Fonts/fontawesome-free-7.2.0-web web/vendor/fontawesome-free-7.2.0-web
 cd web
 npm install
-npm run dev                    # http://localhost:5173, proxies /api → :8765
+npm run dev                    # http://localhost:5180, proxies /api → :8765
 ```
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the
@@ -215,6 +218,7 @@ BFF; CORS is enabled for the dev origin automatically when no built UI is presen
 Build the frontend into the Python package, then serve UI and API from one origin:
 
 ```bash
+ln -sfn /Users/tal/Fonts/fontawesome-free-7.2.0-web web/vendor/fontawesome-free-7.2.0-web
 cd web && npm run build        # → src/elenchos/web/static/
 uv run elenchos serve --open   # http://127.0.0.1:8765
 ```

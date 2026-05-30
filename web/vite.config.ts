@@ -1,8 +1,20 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const webRoot = path.dirname(fileURLToPath(import.meta.url));
+const fontawesomeDir =
+  process.env.FONTAWESOME_WEB ??
+  path.resolve(webRoot, "vendor/fontawesome-free-7.2.0-web");
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      fontawesome: fontawesomeDir,
+    },
+  },
   build: {
     outDir: "../src/elenchos/web/static",
     emptyOutDir: true,
