@@ -1,0 +1,6 @@
+---
+description: lmbench project rules
+alwaysApply: true
+---
+
+Follow `AGENTS.md`. Architecture: `docs/design.md`.
