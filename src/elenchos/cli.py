@@ -7,6 +7,13 @@ from rich.panel import Panel
 from rich.table import Table
 
 from elenchos import __version__
+from elenchos.benchmarks import (
+    BenchmarkNotFoundError,
+    format_suite_error,
+    list_suite_summaries,
+    resolve_benchmark,
+)
+from elenchos.benchmarks.schema import SuiteValidationError
 from elenchos.console import console, setup_logging
 from elenchos.models import (
     Result,
@@ -32,7 +39,9 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer(no_args_is_help=True)
 providers_app = typer.Typer(no_args_is_help=True)
+bench_app = typer.Typer(no_args_is_help=True)
 app.add_typer(providers_app, name="providers")
+app.add_typer(bench_app, name="bench")
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -71,6 +80,82 @@ def providers_list() -> None:
         table.add_row(name, provider.base_url, status)
 
     console.print(table)
+
+
+@bench_app.command("list")
+def bench_list() -> None:
+    """List available benchmark suites."""
+    summaries = list_suite_summaries()
+    if not summaries:
+        console.print("[dim]No benchmark suites found.[/dim]")
+        return
+
+    table = Table(title="Benchmark Suites")
+    table.add_column("ID")
+    table.add_column("Version")
+    table.add_column("Type")
+    table.add_column("Tasks")
+    table.add_column("Source")
+    table.add_column("Description")
+
+    for summary in summaries:
+        table.add_row(
+            summary.id,
+            str(summary.version),
+            summary.type,
+            str(summary.task_count),
+            summary.source,
+            summary.description,
+        )
+
+    console.print(table)
+
+
+@bench_app.command("show")
+def bench_show(
+    benchmark_ref: Annotated[
+        str,
+        typer.Argument(help="Suite id or path to a .yaml file"),
+    ],
+    benchmark_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--benchmark-file",
+            help="Load a suite from this YAML file instead of the registry",
+        ),
+    ] = None,
+) -> None:
+    """Show tasks in a benchmark suite."""
+    try:
+        suite = resolve_benchmark(
+            benchmark_ref,
+            benchmark_file=benchmark_file,
+        )
+    except (BenchmarkNotFoundError, SuiteValidationError) as exc:
+        console.print(f"[red]{format_suite_error(exc)}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    meta = Table(show_header=False, box=None, padding=(0, 1))
+    meta.add_row("ID", suite.id)
+    meta.add_row("Version", str(suite.version))
+    meta.add_row("Type", suite.type)
+    if suite.description:
+        meta.add_row("Description", suite.description)
+    meta.add_row("Tasks", str(len(suite.tasks)))
+    console.print(Panel(meta, title="Benchmark", expand=False))
+
+    for task in suite.tasks:
+        task_type = suite.effective_task_type(task)
+        scorers = suite.effective_scoring(task)
+        scorer_names = ", ".join(scorer.type for scorer in scorers) or "—"
+
+        header = Table(show_header=False, box=None, padding=(0, 1))
+        header.add_row("Type", task_type)
+        header.add_row("Scoring", scorer_names)
+        console.print(Panel(header, title=task.id, expand=False))
+        console.print(
+            Panel(task.prompt.rstrip(), title=f"{task.id} — prompt", expand=False)
+        )
 
 
 @app.command()

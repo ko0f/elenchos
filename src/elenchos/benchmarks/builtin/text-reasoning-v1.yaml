@@ -1,0 +1,39 @@
+id: text-reasoning-v1
+version: 1
+type: text
+description: Short reasoning and QA tasks with deterministic string checks.
+defaults:
+  params:
+    temperature: 0.0
+    max_tokens: 256
+tasks:
+  - id: arithmetic
+    prompt: |
+      What is 2+2? Reply with just the number.
+    scoring:
+      - type: exact_match
+        expected: "4"
+
+  - id: capital
+    prompt: |
+      What is the capital of France? Reply with one word only.
+    scoring:
+      - type: contains_all
+        strings:
+          - Paris
+
+  - id: logic
+    prompt: |
+      If all cats are mammals and Felix is a cat, is Felix a mammal?
+      Reply with yes or no only.
+    scoring:
+      - type: regex_match
+        pattern: "(?i)^yes\\.?$"
+
+  - id: ordering
+    prompt: |
+      Sort these numbers from smallest to largest: 9, 2, 7.
+      Reply with comma-separated numbers only.
+    scoring:
+      - type: exact_match
+        expected: "2, 7, 9"
