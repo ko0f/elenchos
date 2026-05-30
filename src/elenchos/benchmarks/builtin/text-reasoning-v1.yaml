@@ -1,39 +1,171 @@
 id: text-reasoning-v1
-version: 1
+version: 2
 type: text
-description: Short reasoning and QA tasks with deterministic string checks.
+description: >-
+  Sophisticated single-turn reasoning tasks (deductive logic, multi-step math,
+  combinatorics, modular arithmetic, sequence induction, state simulation).
+  Each task is self-contained, fits a small context window, and is answerable in
+  one response. Models reason freely but must end with a deterministic
+  `ANSWER:` line that is graded by regex.
 defaults:
   params:
     temperature: 0.0
-    max_tokens: 256
+    max_tokens: 2048
 tasks:
-  - id: arithmetic
+  - id: knights_knaves
     prompt: |
-      What is 2+2? Reply with just the number.
-    scoring:
-      - type: exact_match
-        expected: "4"
+      On an island, knights always tell the truth and knaves always lie.
+      Every inhabitant is exactly one of the two. You meet two inhabitants, A
+      and B.
+        - A says: "B is a knave."
+        - B says: "A and I are of the same type."
+      Determine A's type.
 
-  - id: capital
-    prompt: |
-      What is the capital of France? Reply with one word only.
-    scoring:
-      - type: contains_all
-        strings:
-          - Paris
-
-  - id: logic
-    prompt: |
-      If all cats are mammals and Felix is a cat, is Felix a mammal?
-      Reply with yes or no only.
+      Reason step by step, then on the final line write exactly:
+      ANSWER: knight   (or)   ANSWER: knave
     scoring:
       - type: regex_match
-        pattern: "(?i)^yes\\.?$"
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*knight\b'
 
-  - id: ordering
+  - id: pipes_rate
     prompt: |
-      Sort these numbers from smallest to largest: 9, 2, 7.
-      Reply with comma-separated numbers only.
+      A tank is empty. Inlet pipe A alone fills it in 6 hours. Inlet pipe B
+      alone fills it in 4 hours. A drain alone empties a full tank in 12 hours.
+      All three are opened simultaneously on the empty tank.
+
+      How many minutes does it take to fill the tank?
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <number of minutes>
     scoring:
-      - type: exact_match
-        expected: "2, 7, 9"
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*180\b'
+
+  - id: dice_increasing
+    prompt: |
+      A standard fair 6-sided die is rolled three times in order. What is the
+      probability that the three results are strictly increasing (each roll
+      larger than the previous)? Give the answer as a fully reduced fraction
+      a/b.
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <a/b>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*5/54(?![\d/])'
+
+  - id: race_order
+    prompt: |
+      Four runners P, Q, R, S finish a race in positions 1st through 4th with
+      no ties. You know:
+        - Q finished ahead of R but behind S.
+        - P did not finish last.
+        - S did not finish first.
+      Who finished in 3rd place?
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <P, Q, R, or S>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*Q\b'
+
+  - id: syllogism_validity
+    prompt: |
+      Consider these two premises:
+        (1) All philosophers are thinkers.
+        (2) Some thinkers are not writers.
+      Does it logically follow, with certainty, that some philosophers are not
+      writers?
+
+      Reason step by step about whether the conclusion is entailed, then on the
+      final line write exactly:
+      ANSWER: yes   (or)   ANSWER: no
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*no\b'
+
+  - id: look_and_say
+    prompt: |
+      Each term of this sequence describes the previous term by reading off its
+      digits aloud (run-length "look-and-say"):
+        1, 11, 21, 1211, 111221, ?
+      What is the next term?
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <next term, digits only>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*312211\b'
+
+  - id: collatz_steps
+    prompt: |
+      Start with the number 7. Repeat this rule: if the current number is even,
+      divide it by 2; if it is odd, multiply by 3 and add 1. Stop as soon as
+      you reach 1. How many steps (applications of the rule) does it take to
+      reach 1?
+
+      Reason step by step, listing the sequence, then on the final line write
+      exactly:
+      ANSWER: <number of steps>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*16\b'
+
+  - id: height_ordering
+    prompt: |
+      From these facts:
+        - Tom is taller than Jim.
+        - Jim is taller than Sam.
+        - Sam is taller than Ed.
+        - Ed is shorter than Pat, and Pat is shorter than Jim.
+      Who is the second tallest of the five people?
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <name>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*Jim\b'
+
+  - id: modular_power
+    prompt: |
+      Compute the remainder when 7^100 is divided by 13. Do not approximate;
+      use modular arithmetic.
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <remainder>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*9\b'
+
+  - id: bat_and_ball
+    prompt: |
+      A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the
+      ball. How much does the ball cost, in cents?
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <number of cents>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*5\b'
+
+  - id: inclusion_exclusion
+    prompt: |
+      How many integers from 1 to 100 inclusive are divisible by 3 or by 5 but
+      NOT by both (i.e., exclude any number divisible by 15)?
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <count>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*41\b'
+
+  - id: time_arithmetic
+    prompt: |
+      A meeting starts at 9:50 AM and lasts 145 minutes. At what clock time does
+      it end? Use 12-hour format like "1:15 PM".
+
+      Reason step by step, then on the final line write exactly:
+      ANSWER: <H:MM AM/PM>
+    scoring:
+      - type: regex_match
+        pattern: '(?im)^\s*\**\s*answer\b\s*[:=]?\s*\**\s*12:15\s*PM\b'

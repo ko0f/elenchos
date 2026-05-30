@@ -92,7 +92,7 @@ def test_registry_includes_builtin_suite():
 
     coding = load_suite(discovered["coding-basics-v1"])
     assert coding.type == "coding"
-    assert len(coding.tasks) == 2
+    assert len(coding.tasks) == 8
 
 
 def test_user_suite_overrides_builtin(tmp_path, monkeypatch):
