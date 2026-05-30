@@ -7,7 +7,9 @@ def summarize_results(results: list[RunResult]) -> dict:
 
     latencies = [result.latency_ms for result in successful]
     prompt_tokens = [
-        result.prompt_tokens for result in successful if result.prompt_tokens is not None
+        result.prompt_tokens
+        for result in successful
+        if result.prompt_tokens is not None
     ]
     completion_tokens = [
         result.completion_tokens

@@ -7,7 +7,7 @@ is always verifiable, not just "code exists".
 Each phase lists: **Goal**, **What you build**, **How to run/verify it**, and
 **Done when**. Phases depend only on earlier ones.
 
-> Prereq: Python 3.11+, an Ollama instance running locally (`ollama serve` with
+> Prereq: Python 3.11+, [uv](https://docs.astral.sh/uv/), an Ollama instance running locally (`ollama serve` with
 > at least one model pulled, e.g. `ollama pull llama3.1:8b`). LM Studio and an
 > OpenRouter key are needed only from Phase 6 onward.
 
@@ -20,16 +20,19 @@ Each phase lists: **Goal**, **What you build**, **How to run/verify it**, and
 **Build**
 - `pyproject.toml` (package `elenchos`, console script `elenchos`).
 - `elenchos/cli.py` with a `typer` app and a `version` command.
-- Dev tooling: `pytest`, `ruff`. Empty `tests/` with one smoke test.
+- `elenchos/console.py`: shared `rich.console.Console` and `logging` setup via
+  `RichHandler` (colored, structured stderr logs; stdout reserved for command
+  output).
+- Dev tooling: `pytest`, `ruff`, `rich`. Empty `tests/` with one smoke test.
 
 **Run / verify**
 ```bash
-pip install -e .
-elenchos version          # prints 0.1.0
-pytest                      # 1 passing smoke test
+uv sync --all-groups
+uv run elenchos version   # prints 0.1.0
+uv run pytest             # 1 passing smoke test
 ```
 
-**Done when:** `elenchos version` works from a clean venv and CI/pytest is green.
+**Done when:** `uv run elenchos version` works after `uv sync` and CI/pytest is green.
 
 ---
 
@@ -44,13 +47,14 @@ pytest                      # 1 passing smoke test
   `/v1` endpoint.
 - `models.py`: parse `provider/model` identifiers.
 - `cli.py`: `prompt --model <id> "text"` and `providers list` (with
-  `health_check`).
+  `health_check`). Use `rich` for response text and status (green healthy, red
+  unhealthy); log request/response details at DEBUG via `RichHandler`.
 
 **Run / verify**
 ```bash
-elenchos providers list                       # shows ollama: healthy
+elenchos providers list                       # colored status: ollama healthy
 elenchos prompt --model ollama/llama3.1:8b "Say hello in one word."
-# -> prints model output + latency + token counts
+# -> colored model output + latency + token counts
 ```
 
 **Test**
@@ -72,7 +76,8 @@ metrics.
   `results.jsonl`, save raw outputs; read back for listing/detail.
 - `models.py`: `Run`, `Result` dataclasses.
 - Make `prompt` persist its call as a single-task run.
-- `cli.py`: `list`, `show <run_id>`.
+- `cli.py`: `list`, `show <run_id>`. Render run lists and detail views with
+  `rich` tables/panels.
 
 **Run / verify**
 ```bash
@@ -125,8 +130,10 @@ elenchos bench show ./broken.yaml      # clear validation error, non-zero exit
 - `scoring/deterministic.py`: `exact_match`, `regex_match`, `contains_all`,
   always-on `metrics` (latency, tokens).
 - `runner.py`: load suite → iterate tasks → `complete()` → score → stream
-  results → aggregate `summary`. Sequential for now.
-- `reporter.py`: render a per-run summary table (`rich`).
+  results → aggregate `summary`. Sequential for now. Per-task progress via
+  `rich` progress/spinner; errors in red.
+- `reporter.py`: render a per-run summary table (`rich`); color pass/fail and
+  latency columns.
 - `cli.py`: `run --benchmark <id> --model <id>`.
 
 **Run / verify**
@@ -260,7 +267,11 @@ shareable report.
 
 ## Cross-cutting (every phase)
 
-- **Tests run via `pytest`**; integration tests that need a live provider are
+- **Terminal output via `rich`**: shared `Console` from `elenchos/console.py`.
+  User-facing results (tables, panels, metrics) on stdout; operational logs on
+  stderr through `logging` + `RichHandler` with level-based color. No raw
+  `print()` in library code.
+- **Tests run via `uv run pytest`**; integration tests that need a live provider are
   marked and skipped when unavailable, so the suite is always green offline.
 - **Each phase ends with a runnable demo command** (the "Run / verify" block) —
   this is the acceptance gate before moving on.

@@ -1,27 +1,34 @@
-import argparse
 from pathlib import Path
 
+import typer
+
+from elenchos import __version__
 from elenchos.runner import run_benchmark
 
+app = typer.Typer(no_args_is_help=True)
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="elenchos")
-    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    run_parser = subparsers.add_parser("run", help="Run prompts against LM Studio")
-    run_parser.add_argument(
+@app.command()
+def version() -> None:
+    """Print the installed version."""
+    typer.echo(__version__)
+
+
+@app.command()
+def run(
+    prompts: Path = typer.Option(
+        Path("prompts/sample.jsonl"),
         "--prompts",
-        type=Path,
-        default=Path("prompts/sample.jsonl"),
         help="Path to JSONL prompt file",
-    )
-
-    return parser
+    ),
+) -> None:
+    """Run prompts against LM Studio."""
+    run_benchmark(prompts)
 
 
 def main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
+    app()
 
-    if args.command == "run":
-        run_benchmark(args.prompts)
+
+if __name__ == "__main__":
+    main()
