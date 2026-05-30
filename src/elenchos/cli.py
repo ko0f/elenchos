@@ -23,7 +23,8 @@ from elenchos.models import (
     parse_model_id,
 )
 from elenchos.providers import get_provider, list_provider_names
-from elenchos.runner import run_benchmark
+from elenchos.reporter import render_run_report
+from elenchos.runner import SuiteRunError, run_suite
 from elenchos.storage import (
     DEFAULT_TASK_ID,
     append_result,
@@ -277,6 +278,16 @@ def show(
     meta.add_row("Started", run.started_at)
     if run.finished_at:
         meta.add_row("Finished", run.finished_at)
+    if run.summary:
+        mean_score = run.summary.get("mean_score")
+        if mean_score is not None:
+            meta.add_row("Mean score", f"{mean_score:.2f}")
+        pass_rate = run.summary.get("pass_rate")
+        if pass_rate is not None:
+            meta.add_row("Pass rate", f"{pass_rate * 100:.0f}%")
+        p95 = run.summary.get("p95_latency_ms")
+        if p95 is not None:
+            meta.add_row("P95 latency", f"{p95:.0f} ms")
     console.print(Panel(meta, title="Run", expand=False))
 
     for result in results:
@@ -307,14 +318,52 @@ def show(
 
 @app.command()
 def run(
-    prompts: Path = typer.Option(
-        Path("prompts/sample.jsonl"),
-        "--prompts",
-        help="Path to JSONL prompt file",
-    ),
+    benchmark: Annotated[
+        str,
+        typer.Option("--benchmark", help="Benchmark suite id"),
+    ],
+    model: Annotated[
+        str,
+        typer.Option("--model", help="Model id: provider/model"),
+    ],
+    benchmark_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--benchmark-file",
+            help="Load benchmark from this YAML file instead of the registry",
+        ),
+    ] = None,
+    temperature: Annotated[
+        float | None,
+        typer.Option("--temperature", help="Override suite default temperature"),
+    ] = None,
+    max_tokens: Annotated[
+        int | None,
+        typer.Option("--max-tokens", help="Override suite default max tokens"),
+    ] = None,
 ) -> None:
-    """Run prompts against LM Studio (legacy)."""
-    run_benchmark(prompts)
+    """Run a text benchmark suite against a model."""
+    try:
+        suite = resolve_benchmark(
+            benchmark,
+            benchmark_file=benchmark_file,
+        )
+    except (BenchmarkNotFoundError, SuiteValidationError) as exc:
+        console.print(f"[red]{format_suite_error(exc)}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    try:
+        outcome = run_suite(
+            suite,
+            model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    except SuiteRunError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    render_run_report(outcome.run, outcome.results, outcome.summary)
 
 
 def main() -> None:

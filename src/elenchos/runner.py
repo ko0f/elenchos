@@ -1,11 +1,44 @@
-import json
-from pathlib import Path
-from time import perf_counter
+"""Benchmark suite orchestration."""
 
-from elenchos.client import create_client, resolve_model
-from elenchos.config import Settings
-from elenchos.metrics import summarize_results
-from elenchos.models import BenchmarkReport, PromptCase, RunResult
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+
+from elenchos.benchmarks.schema import BenchmarkSuite, GenerationParamsDefaults, Task
+from elenchos.config import ElenchosSettings
+from elenchos.console import console
+from elenchos.metrics import aggregate_run_summary
+from elenchos.models import (
+    BenchmarkRef,
+    PromptCase,
+    Result,
+    Run,
+    build_messages,
+    parse_model_id,
+)
+from elenchos.providers.base import GenerationParams, Provider
+from elenchos.providers.registry import get_provider
+from elenchos.scoring.deterministic import score_task_output
+from elenchos.storage import append_result, create_run, finalize_run, save_output
+
+logger = logging.getLogger(__name__)
+
+TEXT_SCORERS = frozenset({"exact_match", "regex_match", "contains_all", "metrics"})
+
+
+class SuiteRunError(ValueError):
+    """Benchmark run cannot proceed."""
+
+
+@dataclass
+class SuiteRunOutcome:
+    run: Run
+    run_dir: Path
+    results: list[Result]
+    summary: dict
 
 
 def load_prompts(path: Path) -> list[PromptCase]:
@@ -32,84 +65,182 @@ def load_prompts(path: Path) -> list[PromptCase]:
     return cases
 
 
-def run_benchmark(prompts_path: Path, settings: Settings | None = None) -> Path:
-    settings = settings or Settings()
-    client = create_client(settings)
-    model = resolve_model(client, settings)
-    cases = load_prompts(prompts_path)
-
-    report = BenchmarkReport(
-        model=model,
-        base_url=settings.lm_studio_base_url,
-        started_at=BenchmarkReport.now_iso(),
-        finished_at="",
+def resolve_generation_params(
+    suite: BenchmarkSuite,
+    *,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> GenerationParams:
+    defaults = (
+        suite.defaults.params
+        if suite.defaults and suite.defaults.params
+        else GenerationParamsDefaults()
+    )
+    return GenerationParams(
+        temperature=defaults.temperature if temperature is None else temperature,
+        top_p=defaults.top_p if defaults.top_p is not None else 1.0,
+        max_tokens=defaults.max_tokens if max_tokens is None else max_tokens,
+        seed=defaults.seed,
+        stop=defaults.stop,
     )
 
-    for case in cases:
-        report.results.append(_run_case(client, model, case, settings))
 
-    report.finished_at = BenchmarkReport.now_iso()
+def _validate_suite_for_text_run(suite: BenchmarkSuite) -> None:
+    if suite.type != "text":
+        raise SuiteRunError(
+            f"Suite {suite.id!r} has type {suite.type!r}; "
+            "only text suites are supported in this release."
+        )
 
-    output_path = _write_report(report, settings)
-    summary = summarize_results(report.results)
-    print(json.dumps(summary, indent=2))
-    print(f"Wrote report to {output_path}")
+    for task in suite.tasks:
+        task_type = suite.effective_task_type(task)
+        if task_type != "text":
+            raise SuiteRunError(
+                f"Task {task.id!r} has type {task_type!r}; "
+                "coding tasks require code execution (not yet enabled)."
+            )
 
-    return output_path
+        for scorer in suite.effective_scoring(task):
+            if scorer.type not in TEXT_SCORERS:
+                raise SuiteRunError(
+                    f"Task {task.id!r} uses scorer {scorer.type!r}; "
+                    "only exact_match, regex_match, and contains_all are "
+                    "supported in this release."
+                )
 
 
-def _run_case(
-    client,
-    model: str,
-    case: PromptCase,
-    settings: Settings,
-) -> RunResult:
-    started = perf_counter()
+def _generation_params_to_dict(params: GenerationParams) -> dict:
+    payload: dict = {"temperature": params.temperature, "top_p": params.top_p}
+    if params.max_tokens is not None:
+        payload["max_tokens"] = params.max_tokens
+    if params.seed is not None:
+        payload["seed"] = params.seed
+    if params.stop is not None:
+        payload["stop"] = params.stop
+    return payload
+
+
+def _run_task(
+    *,
+    provider: Provider,
+    model_name: str,
+    params: GenerationParams,
+    suite: BenchmarkSuite,
+    task: Task,
+) -> Result:
+    messages = build_messages(task.prompt)
+    scorers = suite.effective_scoring(task)
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": case.prompt}],
-            temperature=settings.temperature,
-            max_tokens=settings.max_tokens,
-        )
-        latency_ms = (perf_counter() - started) * 1000
-        choice = response.choices[0].message.content or ""
-        usage = response.usage
-
-        return RunResult(
-            case_id=case.id,
-            prompt=case.prompt,
-            response=choice,
-            model=model,
-            latency_ms=latency_ms,
-            prompt_tokens=getattr(usage, "prompt_tokens", None),
-            completion_tokens=getattr(usage, "completion_tokens", None),
-            total_tokens=getattr(usage, "total_tokens", None),
-        )
+        completion = provider.complete(model_name, messages, params)
     except Exception as exc:
-        latency_ms = (perf_counter() - started) * 1000
-        return RunResult(
-            case_id=case.id,
-            prompt=case.prompt,
-            response="",
-            model=model,
-            latency_ms=latency_ms,
+        logger.exception("Task %s failed", task.id)
+        return Result(
+            task_id=task.id,
+            prompt=task.prompt,
+            latency_ms=0.0,
             error=str(exc),
         )
 
+    score_outcome = score_task_output(completion.text, scorers)
+    return Result(
+        task_id=task.id,
+        prompt=task.prompt,
+        latency_ms=completion.latency_ms,
+        prompt_tokens=completion.prompt_tokens,
+        completion_tokens=completion.completion_tokens,
+        finish_reason=completion.finish_reason,
+        score=score_outcome.score,
+        scorer=score_outcome.scorer,
+        passed=score_outcome.passed,
+        total=score_outcome.total,
+        output=completion.text,
+    )
 
-def _write_report(report: BenchmarkReport, settings: Settings) -> Path:
-    results_dir = Path(settings.results_dir)
-    results_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = report.started_at.replace(":", "-")
-    output_path = results_dir / f"benchmark-{timestamp}.json"
+def run_suite(
+    suite: BenchmarkSuite,
+    model: str,
+    *,
+    provider: Provider | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    settings: ElenchosSettings | None = None,
+    show_progress: bool = True,
+) -> SuiteRunOutcome:
+    """Run all tasks in a text benchmark suite sequentially."""
+    _validate_suite_for_text_run(suite)
 
-    payload = report.to_dict()
-    payload["summary"] = summarize_results(report.results)
+    model_id = parse_model_id(model)
+    provider = provider or get_provider(model_id.provider)
+    params = resolve_generation_params(
+        suite,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
-    with output_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2)
+    if not provider.health_check():
+        raise SuiteRunError(
+            f"Provider {provider.name!r} is unhealthy at {provider.base_url}."
+        )
 
-    return output_path
+    benchmark = BenchmarkRef(id=suite.id, version=suite.version)
+    run_dir, run = create_run(
+        model=model_id.qualified,
+        params=_generation_params_to_dict(params),
+        benchmark=benchmark,
+        settings=settings,
+    )
+
+    results: list[Result] = []
+
+    for index, task in enumerate(suite.tasks, start=1):
+        label = f"[{index}/{len(suite.tasks)}] {task.id}"
+        if show_progress:
+            with console.status(label):
+                result = _run_task(
+                    provider=provider,
+                    model_name=model_id.model,
+                    params=params,
+                    suite=suite,
+                    task=task,
+                )
+        else:
+            result = _run_task(
+                provider=provider,
+                model_name=model_id.model,
+                params=params,
+                suite=suite,
+                task=task,
+            )
+
+        if result.error:
+            append_result(run_dir, result)
+            results.append(result)
+            if show_progress:
+                console.print(f"[red]{label} error:[/red] {result.error}")
+            continue
+
+        output_ref = save_output(run_dir, task.id, result.output or "")
+        result.output_ref = output_ref
+        append_result(run_dir, result)
+        results.append(result)
+
+        if show_progress and result.score is not None:
+            if result.score >= 1.0:
+                console.print(f"[green]{label}[/green] score={result.score:.2f}")
+            elif result.score > 0:
+                console.print(f"[yellow]{label}[/yellow] score={result.score:.2f}")
+            else:
+                console.print(f"[red]{label}[/red] score={result.score:.2f}")
+
+    summary = aggregate_run_summary(results)
+    run.summary = summary
+    finalize_run(run_dir, run)
+
+    return SuiteRunOutcome(
+        run=run,
+        run_dir=run_dir,
+        results=results,
+        summary=summary,
+    )
