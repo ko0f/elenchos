@@ -57,16 +57,16 @@
   font-size: 0.6875rem;
   font-weight: 600;
   font-family: var(--mono);
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--accent-muted-bg);
+  color: var(--accent-muted-text);
 }
 
 .scorer-chip--unit_test {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warn-bg);
+  color: var(--warn-text);
 }
 
 .scorer-chip--judge_rubric {
-  background: #fae8ff;
-  color: #86198f;
+  background: var(--info-bg);
+  color: var(--info-text);
 }

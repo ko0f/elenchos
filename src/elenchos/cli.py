@@ -156,7 +156,12 @@ def serve(
             )
             raise typer.Exit(code=1)
 
-    uvicorn.run("elenchos.web.app:app", host=host, port=port)
+    uvicorn.run(
+        "elenchos.web.app:app",
+        host=host,
+        port=port,
+        access_log=False,
+    )
 
 
 @providers_app.command("list")

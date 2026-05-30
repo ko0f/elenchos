@@ -21,8 +21,12 @@
   background: var(--surface-alt);
 }
 
+.results-table__row {
+  cursor: pointer;
+}
+
 .results-table tbody tr:hover {
-  background: #fafafa;
+  background: var(--surface-hover);
 }
 
 .results-table__task {
@@ -30,22 +34,13 @@
   font-weight: 500;
 }
 
+.results-table__tokens {
+  font-variant-numeric: tabular-nums;
+}
+
 .results-table__error {
   color: var(--error);
   font-size: 0.8125rem;
-}
-
-.results-table__expand {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 0.25rem;
-  background: var(--surface);
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.results-table__expand:hover {
-  border-color: var(--accent);
 }
 
 .results-table__detail-row td {

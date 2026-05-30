@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import type { TaskResult } from "../api/types";
-import { formatLatency } from "../lib/format";
+import { formatLatency, formatTokenBreakdown, formatTokens } from "../lib/format";
 import { ScoreBadge } from "./ScoreBadge";
 import { TaskOutputPanel } from "./TaskOutputPanel";
 import "./ResultsTable.css";
@@ -24,8 +24,8 @@ export function ResultsTable({ runId, results }: ResultsTableProps) {
           <th>Task</th>
           <th>Score</th>
           <th>Latency</th>
+          <th>Tokens</th>
           <th>Status</th>
-          <th />
         </tr>
       </thead>
       <tbody>
@@ -33,12 +33,29 @@ export function ResultsTable({ runId, results }: ResultsTableProps) {
           const isOpen = expanded === result.task_id;
           return (
             <Fragment key={result.task_id}>
-              <tr>
+              <tr
+                className="results-table__row"
+                onClick={() => toggle(result.task_id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggle(result.task_id);
+                  }
+                }}
+                tabIndex={0}
+                aria-expanded={isOpen}
+              >
                 <td className="results-table__task">{result.task_id}</td>
                 <td>
                   <ScoreBadge score={result.error ? null : result.score} />
                 </td>
                 <td>{formatLatency(result.latency_ms)}</td>
+                <td
+                  className="results-table__tokens"
+                  title={formatTokenBreakdown(result.prompt_tokens, result.completion_tokens)}
+                >
+                  {formatTokens(result.prompt_tokens, result.completion_tokens)}
+                </td>
                 <td>
                   {result.error ? (
                     <span className="results-table__error">error</span>
@@ -51,16 +68,6 @@ export function ResultsTable({ runId, results }: ResultsTableProps) {
                   ) : (
                     "unscored"
                   )}
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="results-table__expand"
-                    onClick={() => toggle(result.task_id)}
-                    aria-expanded={isOpen}
-                  >
-                    {isOpen ? "Hide" : "Show"}
-                  </button>
                 </td>
               </tr>
               {isOpen && (

@@ -42,8 +42,8 @@
 }
 
 .layout__nav-link--active {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--accent-muted-bg);
+  color: var(--accent-muted-text);
 }
 
 .layout__main {
@@ -172,7 +172,7 @@
 }
 
 .runs-table tbody tr:hover {
-  background: #fafafa;
+  background: var(--surface-hover);
 }
 
 .runs-table a {
@@ -200,11 +200,11 @@
 }
 
 .hint-badge--warn {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warn-bg);
+  color: var(--warn-text);
 }
 
 .hint-badge--info {
-  background: #fae8ff;
-  color: #86198f;
+  background: var(--info-bg);
+  color: var(--info-text);
 }

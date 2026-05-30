@@ -25,6 +25,34 @@ export function formatLatency(ms: number | null | undefined): string {
   return `${Math.round(ms)} ms`;
 }
 
+export function formatTokens(
+  promptTokens: number | null | undefined,
+  completionTokens: number | null | undefined,
+): string {
+  if (promptTokens == null && completionTokens == null) {
+    return "—";
+  }
+  const total = (promptTokens ?? 0) + (completionTokens ?? 0);
+  return total.toLocaleString();
+}
+
+export function formatTokenBreakdown(
+  promptTokens: number | null | undefined,
+  completionTokens: number | null | undefined,
+): string | undefined {
+  if (promptTokens == null && completionTokens == null) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  if (promptTokens != null) {
+    parts.push(`Prompt: ${promptTokens.toLocaleString()}`);
+  }
+  if (completionTokens != null) {
+    parts.push(`Completion: ${completionTokens.toLocaleString()}`);
+  }
+  return parts.join(", ");
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) {
     return "—";
