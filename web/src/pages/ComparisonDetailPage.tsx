@@ -1,9 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
+import { FaIcon } from "../components/FaIcon";
 import { formatDate } from "../lib/format";
 import "../components/RunPicker.css";
+import "./RunDetailPage.css";
 
 function formatPct(value: unknown): string {
   if (typeof value !== "number") {
@@ -14,10 +16,41 @@ function formatPct(value: unknown): string {
 
 export function ComparisonDetailPage() {
   const { comparisonId = "" } = useParams();
+  const queryClient = useQueryClient();
+  const [pinError, setPinError] = useState<string | null>(null);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.comparison(comparisonId),
     queryFn: () => api.getComparison(comparisonId),
     enabled: Boolean(comparisonId),
+  });
+
+  const pinMutation = useMutation({
+    mutationFn: api.pinComparisonBaselineSource,
+    onSuccess: (updated) => {
+      setPinError(null);
+      queryClient.setQueryData(queryKeys.comparison(comparisonId), updated);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs });
+    },
+    onError: (err) => {
+      setPinError(
+        err instanceof Error ? err.message : "Failed to pin comparison",
+      );
+    },
+  });
+
+  const unpinMutation = useMutation({
+    mutationFn: api.unpinComparisonBaselineSource,
+    onSuccess: (updated) => {
+      setPinError(null);
+      queryClient.setQueryData(queryKeys.comparison(comparisonId), updated);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs });
+    },
+    onError: (err) => {
+      setPinError(
+        err instanceof Error ? err.message : "Failed to unpin comparison",
+      );
+    },
   });
 
   if (isLoading) {
@@ -41,6 +74,21 @@ export function ComparisonDetailPage() {
   const winRate = summary.win_rate as Record<string, number> | undefined;
   const meanScore = summary.mean_score as Record<string, number> | undefined;
   const runLabel = Object.fromEntries(data.runs.map((run) => [run.run_id, run.model]));
+  const canPin = data.mode === "rubric";
+  const isPinned = Boolean(data.is_baseline_source);
+  const pinBusy = pinMutation.isPending || unpinMutation.isPending;
+  const hasBaseline = Boolean(data.baseline_run_id);
+
+  function toggleBaselineSource() {
+    if (pinBusy || !canPin) {
+      return;
+    }
+    if (isPinned) {
+      unpinMutation.mutate(comparisonId);
+    } else {
+      pinMutation.mutate(comparisonId);
+    }
+  }
 
   return (
     <>
@@ -48,11 +96,45 @@ export function ComparisonDetailPage() {
         <p className="page-header__subtitle">
           <Link to="/runs">Runs</Link> / {data.comparison_id}
         </p>
-        <h1>{data.comparison_id}</h1>
+        <div className="page-header__title-row">
+          <h1>{data.comparison_id}</h1>
+          {canPin && (
+            <button
+              type="button"
+              className={`baseline-star${isPinned ? " baseline-star--active" : ""}`}
+              aria-label={
+                isPinned
+                  ? `Stop using ${data.comparison_id} for vs-baseline scores`
+                  : `Use ${data.comparison_id} for vs-baseline scores`
+              }
+              disabled={pinBusy || (!isPinned && !hasBaseline)}
+              title={
+                !hasBaseline && !isPinned
+                  ? "Set a baseline run on Runs first"
+                  : undefined
+              }
+              onClick={toggleBaselineSource}
+            >
+              <FaIcon icon="star" variant={isPinned ? "solid" : "regular"} />
+            </button>
+          )}
+        </div>
         <p className="page-header__subtitle">
           {data.benchmark_id} · {data.mode} · judge {data.judge_model} ·{" "}
           {formatDate(data.started_at)}
+          {isPinned ? " · vs-baseline source" : ""}
         </p>
+        {pinError && (
+          <p className="page-header__subtitle page-header__subtitle--error">
+            {pinError}
+          </p>
+        )}
+        {canPin && !hasBaseline && !isPinned && (
+          <p className="page-header__subtitle">
+            Star a baseline run on <Link to="/runs">Runs</Link> before pinning this
+            comparison.
+          </p>
+        )}
       </header>
 
       <div className="compare-summary">

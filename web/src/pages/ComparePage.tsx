@@ -58,6 +58,17 @@ export function ComparePage() {
 
   const judge = qualifiedModel(judgeProvider, judgeModel);
   const selectedRuns = runs.filter((run) => initialRuns.includes(run.run_id));
+  const runIdsForCompare = useMemo(() => {
+    const benchmarkId = selectedRuns[0]?.benchmark?.id;
+    const baseline = runs.find(
+      (run) => run.is_baseline && run.benchmark?.id === benchmarkId,
+    );
+    const ids = [...initialRuns];
+    if (baseline && !ids.includes(baseline.run_id)) {
+      ids.push(baseline.run_id);
+    }
+    return ids;
+  }, [initialRuns, runs, selectedRuns]);
   const compareValid = canCompareRuns(initialRuns, runs);
   const canSubmit =
     initialRuns.length >= 2 &&
@@ -83,7 +94,7 @@ export function ComparePage() {
     setError(null);
     try {
       const response = await api.createCompare({
-        run_ids: initialRuns,
+        run_ids: runIdsForCompare,
         mode,
         judge,
         ...(judgeEffort
@@ -131,11 +142,14 @@ export function ComparePage() {
       ) : (
         <form className="run-launcher" onSubmit={(event) => void handleSubmit(event)}>
           <ul className="compare-run-list">
-            {selectedRuns.map((run) => (
-              <li key={run.run_id}>
-                <code>{run.run_id}</code> · {run.model}
-              </li>
-            ))}
+            {runs
+              .filter((run) => runIdsForCompare.includes(run.run_id))
+              .map((run) => (
+                <li key={run.run_id}>
+                  <code>{run.run_id}</code> · {run.model}
+                  {run.is_baseline ? " (baseline)" : ""}
+                </li>
+              ))}
           </ul>
 
           <label className="form-field">

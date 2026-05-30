@@ -1,0 +1,36 @@
+# Copy to ~/.elenchos/config.yaml (or $ELENCHOS_DATA_DIR/config.yaml).
+# Precedence: CLI flags > ELENCHOS_* env vars > this file > built-in defaults.
+#
+# API keys: set via env (recommended), not inline here — e.g. OPENROUTER_API_KEY.
+# See .env.example for ELENCHOS_* overrides.
+
+providers:
+  # Built-in providers; omit a block to use defaults (Ollama/LM Studio localhost).
+  ollama:
+    base_url: http://localhost:11434
+  lmstudio:
+    base_url: http://localhost:1234/v1
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+
+# Judge model for compare, rubric suites, and vs-baseline on coding (unit_test) benchmarks.
+judge:
+  model: openrouter/anthropic/claude-sonnet-4-6
+  # pairwise — two runs; rubric — 2+ runs and vs-baseline quality scores
+  mode: rubric
+
+defaults:
+  concurrency: 4
+  max_retries: 3
+
+# Optional: ~/.elenchos/baselines.json pins baseline runs and rubric comparisons.
+# Example:
+# {
+#   "coding-basics-v1": {
+#     "run_id": "ae536c",
+#     "comparison_id": "7b88f4"
+#   }
+# }
+# When comparison_id is set, vs-baseline uses that comparison's judge scores.
+# New rubric comparisons auto-update the pin when a baseline is set.

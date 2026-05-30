@@ -189,6 +189,22 @@ class JobManager:
             f"job {job.job_id[:8]} done comparison_id={artifact.comparison_id} "
             f"summary={artifact.summary}"
         )
+        if artifact.mode == "rubric":
+            from elenchos.storage import get_baseline_entry, set_baseline_comparison
+
+            if get_baseline_entry(artifact.benchmark_id, settings) is not None:
+                try:
+                    set_baseline_comparison(
+                        artifact.benchmark_id,
+                        artifact.comparison_id,
+                        settings,
+                    )
+                except ValueError:
+                    logger.warning(
+                        "Could not pin comparison %s for benchmark %s",
+                        artifact.comparison_id,
+                        artifact.benchmark_id,
+                    )
         self._notify(job.job_id)
 
     def _run_suite_worker(

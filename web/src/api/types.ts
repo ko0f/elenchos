@@ -204,6 +204,8 @@ export interface ComparisonDetail {
   runs: Array<{ run_id: string; model: string }>;
   tasks: TaskComparison[];
   summary?: Record<string, unknown> | null;
+  is_baseline_source?: boolean;
+  baseline_run_id?: string | null;
 }
 
 export interface CreateCompareRequest {

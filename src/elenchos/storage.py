@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import secrets
 import shutil
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -327,7 +328,30 @@ def _baselines_path(settings: ElenchosSettings | None = None) -> Path:
     return _settings(settings).data_dir / "baselines.json"
 
 
-def load_baselines(settings: ElenchosSettings | None = None) -> dict[str, str]:
+@dataclass(frozen=True)
+class BaselineEntry:
+    run_id: str
+    comparison_id: str | None = None
+
+
+def _parse_baseline_entry(value: object) -> BaselineEntry | None:
+    if isinstance(value, str):
+        return BaselineEntry(run_id=value)
+    if isinstance(value, dict):
+        run_id = value.get("run_id")
+        if not run_id:
+            return None
+        comparison_id = value.get("comparison_id")
+        return BaselineEntry(
+            run_id=str(run_id),
+            comparison_id=str(comparison_id) if comparison_id else None,
+        )
+    return None
+
+
+def load_baseline_entries(
+    settings: ElenchosSettings | None = None,
+) -> dict[str, BaselineEntry]:
     path = _baselines_path(settings)
     if not path.is_file():
         return {}
@@ -335,27 +359,50 @@ def load_baselines(settings: ElenchosSettings | None = None) -> dict[str, str]:
         payload = json.load(handle)
     if not isinstance(payload, dict):
         return {}
-    return {str(key): str(value) for key, value in payload.items()}
+
+    entries: dict[str, BaselineEntry] = {}
+    for benchmark_id, value in payload.items():
+        entry = _parse_baseline_entry(value)
+        if entry is not None:
+            entries[str(benchmark_id)] = entry
+    return entries
+
+
+def load_baselines(settings: ElenchosSettings | None = None) -> dict[str, str]:
+    return {
+        benchmark_id: entry.run_id
+        for benchmark_id, entry in load_baseline_entries(settings).items()
+    }
+
+
+def get_baseline_entry(
+    benchmark_id: str,
+    settings: ElenchosSettings | None = None,
+) -> BaselineEntry | None:
+    return load_baseline_entries(settings).get(benchmark_id)
 
 
 def get_baseline_run_id(
     benchmark_id: str,
     settings: ElenchosSettings | None = None,
 ) -> str | None:
-    return load_baselines(settings).get(benchmark_id)
+    entry = get_baseline_entry(benchmark_id, settings)
+    return entry.run_id if entry is not None else None
+
+
+def get_baseline_comparison_id(
+    benchmark_id: str,
+    settings: ElenchosSettings | None = None,
+) -> str | None:
+    entry = get_baseline_entry(benchmark_id, settings)
+    return entry.comparison_id if entry is not None else None
 
 
 def _write_baselines(
     baselines: dict[str, str],
     settings: ElenchosSettings | None = None,
 ) -> None:
-    path = _baselines_path(settings)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as handle:
-        json.dump(baselines, handle, indent=2)
-        handle.write("\n")
-    tmp.replace(path)
+    _write_baselines_raw(baselines, settings)
 
 
 def set_baseline(
@@ -372,20 +419,86 @@ def set_baseline(
         raise ValueError(
             f"Run {run_id!r} benchmark {run.benchmark!r} does not match {benchmark_id!r}"
         )
-    baselines = load_baselines(settings)
-    baselines[benchmark_id] = run_id
-    _write_baselines(baselines, settings)
+    entries = load_baseline_entries(settings)
+    previous = entries.get(benchmark_id)
+    entries[benchmark_id] = BaselineEntry(
+        run_id=run_id,
+        comparison_id=previous.comparison_id if previous else None,
+    )
+    _write_baseline_entries(entries, settings)
+
+
+def set_baseline_comparison(
+    benchmark_id: str,
+    comparison_id: str,
+    settings: ElenchosSettings | None = None,
+) -> None:
+    """Pin a rubric comparison as the vs-baseline score source for a benchmark."""
+    entry = get_baseline_entry(benchmark_id, settings)
+    if entry is None:
+        raise ValueError(f"No baseline set for benchmark {benchmark_id!r}")
+    entries = load_baseline_entries(settings)
+    entries[benchmark_id] = BaselineEntry(
+        run_id=entry.run_id,
+        comparison_id=comparison_id,
+    )
+    _write_baseline_entries(entries, settings)
+
+
+def clear_baseline_comparison(
+    benchmark_id: str,
+    settings: ElenchosSettings | None = None,
+) -> None:
+    """Stop using a pinned comparison for vs-baseline scores."""
+    entry = get_baseline_entry(benchmark_id, settings)
+    if entry is None or not entry.comparison_id:
+        return
+    entries = load_baseline_entries(settings)
+    entries[benchmark_id] = BaselineEntry(
+        run_id=entry.run_id,
+        comparison_id=None,
+    )
+    _write_baseline_entries(entries, settings)
+
+
+def _write_baseline_entries(
+    entries: dict[str, BaselineEntry],
+    settings: ElenchosSettings | None = None,
+) -> None:
+    payload: dict[str, dict[str, str] | str] = {}
+    for benchmark_id, entry in entries.items():
+        if entry.comparison_id:
+            payload[benchmark_id] = {
+                "run_id": entry.run_id,
+                "comparison_id": entry.comparison_id,
+            }
+        else:
+            payload[benchmark_id] = entry.run_id
+    _write_baselines_raw(payload, settings)
+
+
+def _write_baselines_raw(
+    baselines: dict[str, dict[str, str] | str],
+    settings: ElenchosSettings | None = None,
+) -> None:
+    path = _baselines_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
+        json.dump(baselines, handle, indent=2)
+        handle.write("\n")
+    tmp.replace(path)
 
 
 def clear_baseline(
     benchmark_id: str,
     settings: ElenchosSettings | None = None,
 ) -> None:
-    baselines = load_baselines(settings)
-    if benchmark_id not in baselines:
+    entries = load_baseline_entries(settings)
+    if benchmark_id not in entries:
         return
-    del baselines[benchmark_id]
-    _write_baselines(baselines, settings)
+    del entries[benchmark_id]
+    _write_baseline_entries(entries, settings)
 
 
 def write_baseline_score(run_dir: Path, payload: dict) -> None:
@@ -416,9 +529,10 @@ def delete_run(
         return False
     run_dir, run = found
     if run.benchmark is not None:
-        baselines = load_baselines(settings)
-        if baselines.get(run.benchmark.id) == run_id:
-            del baselines[run.benchmark.id]
-            _write_baselines(baselines, settings)
+        entries = load_baseline_entries(settings)
+        entry = entries.get(run.benchmark.id)
+        if entry is not None and entry.run_id == run_id:
+            del entries[run.benchmark.id]
+            _write_baseline_entries(entries, settings)
     shutil.rmtree(run_dir)
     return True

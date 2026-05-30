@@ -211,6 +211,8 @@ class ComparisonDetailResponse(BaseModel):
     runs: list[dict]
     tasks: list[TaskComparisonResponse]
     summary: dict | None = None
+    is_baseline_source: bool = False
+    baseline_run_id: str | None = None
 
 
 class ReportRequest(BaseModel):
@@ -403,12 +405,23 @@ def comparison_summary_from_dict(payload: dict) -> ComparisonSummaryResponse:
     )
 
 
-def comparison_detail_from_dict(payload: dict) -> ComparisonDetailResponse:
+def comparison_detail_from_dict(
+    payload: dict,
+    *,
+    settings: ElenchosSettings | None = None,
+) -> ComparisonDetailResponse:
+    from elenchos.config import ElenchosSettings
+    from elenchos.storage import get_baseline_comparison_id, get_baseline_run_id
+
+    settings = settings or ElenchosSettings()
+    benchmark_id = payload["benchmark_id"]
+    comparison_id = payload["comparison_id"]
+    pinned = get_baseline_comparison_id(benchmark_id, settings)
     return ComparisonDetailResponse(
-        comparison_id=payload["comparison_id"],
+        comparison_id=comparison_id,
         mode=payload["mode"],
         judge_model=payload["judge_model"],
-        benchmark_id=payload["benchmark_id"],
+        benchmark_id=benchmark_id,
         started_at=payload["started_at"],
         finished_at=payload.get("finished_at"),
         runs=payload.get("runs", []),
@@ -417,6 +430,8 @@ def comparison_detail_from_dict(payload: dict) -> ComparisonDetailResponse:
             for task in payload.get("tasks", [])
         ],
         summary=payload.get("summary"),
+        is_baseline_source=pinned == comparison_id,
+        baseline_run_id=get_baseline_run_id(benchmark_id, settings),
     )
 
 

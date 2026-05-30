@@ -164,6 +164,20 @@ export const api = {
     return request(`/comparisons/${encodeURIComponent(id)}`);
   },
 
+  pinComparisonBaselineSource(comparisonId: string): Promise<ComparisonDetail> {
+    return request(
+      `/comparisons/${encodeURIComponent(comparisonId)}/baseline-source`,
+      { method: "POST" },
+    );
+  },
+
+  unpinComparisonBaselineSource(comparisonId: string): Promise<ComparisonDetail> {
+    return request(
+      `/comparisons/${encodeURIComponent(comparisonId)}/baseline-source`,
+      { method: "DELETE" },
+    );
+  },
+
   async buildReport(body: ReportRequest): Promise<LeaderboardReport | string> {
     const response = await fetch(`${API_BASE}/report`, {
       method: "POST",

@@ -133,18 +133,20 @@ export function RunsPage() {
                   }}
                 >
                   <td onClick={(event) => event.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${run.run_id}`}
-                      checked={selected.includes(run.run_id)}
-                      onChange={() => {
-                        if (selected.includes(run.run_id)) {
-                          setSelected(selected.filter((id) => id !== run.run_id));
-                        } else {
-                          setSelected([...selected, run.run_id]);
-                        }
-                      }}
-                    />
+                    {!run.is_baseline && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${run.run_id}`}
+                        checked={selected.includes(run.run_id)}
+                        onChange={() => {
+                          if (selected.includes(run.run_id)) {
+                            setSelected(selected.filter((id) => id !== run.run_id));
+                          } else {
+                            setSelected([...selected, run.run_id]);
+                          }
+                        }}
+                      />
+                    )}
                   </td>
                   <td>{formatDate(run.started_at)}</td>
                   <td>{run.benchmark?.id ?? "—"}</td>

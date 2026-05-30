@@ -142,7 +142,8 @@ uv run elenchos report --runs run-a run-b run-c --format md
 ```
 
 Set `judge.model` in `~/.elenchos/config.yaml` to avoid passing `--judge` every
-time.
+time. Copy [`config.yaml.example`](config.yaml.example) to `~/.elenchos/config.yaml`
+as a starting point.
 
 ## Web UI
 

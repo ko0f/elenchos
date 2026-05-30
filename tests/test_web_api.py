@@ -675,6 +675,108 @@ def test_post_compare_enqueues_job(mock_compare_runs, api_client):
     assert detail["tasks"][0]["winner_run_id"] == run_a.run_id
 
 
+def test_pin_comparison_baseline_source(api_client):
+    client, settings = api_client
+    from elenchos.storage import save_comparison, set_baseline
+
+    base = _seed_compare_run((client, settings), suffix="base", output="4")
+    cand = _seed_compare_run((client, settings), suffix="cand", output="3")
+    set_baseline("text-reasoning-v1", base.run_id, settings)
+
+    class _Artifact:
+        comparison_id = "rubric1"
+        mode = "rubric"
+        benchmark_id = "text-reasoning-v1"
+        started_at = "2025-01-01T00:00:00+00:00"
+
+        def to_dict(self):
+            return {
+                "comparison_id": self.comparison_id,
+                "mode": self.mode,
+                "judge_model": "mock/judge",
+                "benchmark_id": self.benchmark_id,
+                "started_at": self.started_at,
+                "finished_at": "2025-01-01T00:01:00+00:00",
+                "runs": [
+                    {"run_id": base.run_id, "model": base.model},
+                    {"run_id": cand.run_id, "model": cand.model},
+                ],
+                "tasks": [
+                    {
+                        "task_id": "arithmetic",
+                        "prompt": "What is 2+2?",
+                        "winner_run_id": base.run_id,
+                        "scores": {base.run_id: 1.0, cand.run_id: 0.5},
+                    }
+                ],
+                "summary": {
+                    "task_count": 1,
+                    "mean_score": {base.run_id: 1.0, cand.run_id: 0.5},
+                },
+            }
+
+    save_comparison(_Artifact(), settings=settings)
+
+    detail = client.get("/api/comparisons/rubric1")
+    assert detail.status_code == 200
+    assert detail.json()["is_baseline_source"] is False
+
+    pin = client.post("/api/comparisons/rubric1/baseline-source")
+    assert pin.status_code == 200
+    assert pin.json()["is_baseline_source"] is True
+
+    pinned = client.get("/api/comparisons/rubric1")
+    assert pinned.json()["is_baseline_source"] is True
+    assert pinned.json()["baseline_run_id"] == base.run_id
+
+    cleared = client.delete("/api/comparisons/rubric1/baseline-source")
+    assert cleared.status_code == 200
+    assert cleared.json()["is_baseline_source"] is False
+
+    pairwise = _Artifact()
+    pairwise.comparison_id = "pair1"
+    pairwise.mode = "pairwise"
+    save_comparison(pairwise, settings=settings)
+    bad = client.post("/api/comparisons/pair1/baseline-source")
+    assert bad.status_code == 400
+
+
+def test_pin_comparison_requires_baseline_run(api_client):
+    client, settings = api_client
+    from elenchos.storage import save_comparison
+
+    run_dir, run = create_run(
+        model="ollama/c",
+        params={"temperature": 0.0},
+        benchmark=BenchmarkRef(id="coding-basics-v1", version=1),
+        settings=settings,
+    )
+    finalize_run(run_dir, run)
+
+    class _Artifact:
+        comparison_id = "code-rubric"
+        mode = "rubric"
+        benchmark_id = "coding-basics-v1"
+        started_at = "2025-01-01T00:00:00+00:00"
+
+        def to_dict(self):
+            return {
+                "comparison_id": self.comparison_id,
+                "mode": self.mode,
+                "judge_model": "mock/judge",
+                "benchmark_id": self.benchmark_id,
+                "started_at": self.started_at,
+                "finished_at": "2025-01-01T00:01:00+00:00",
+                "runs": [{"run_id": run.run_id, "model": run.model}],
+                "tasks": [],
+                "summary": {"task_count": 0, "mean_score": {run.run_id: 0.5}},
+            }
+
+    save_comparison(_Artifact(), settings=settings)
+    response = client.post("/api/comparisons/code-rubric/baseline-source")
+    assert response.status_code == 400
+
+
 def test_post_report_json(api_client):
     client, settings = api_client
     run_a = _seed_compare_run((client, settings), suffix="a", output="4")

@@ -36,6 +36,16 @@ const runs = [
     baseline_score: 0.5,
     baseline_run_id: "run-a",
   },
+  {
+    run_id: "run-c",
+    started_at: "2025-01-01T02:00:00Z",
+    model: "ollama/c",
+    benchmark: { id: "text-reasoning-v1", version: 1 },
+    summary: { mean_score: 0.75 },
+    is_baseline: false,
+    baseline_score: 0.75,
+    baseline_run_id: "run-a",
+  },
 ];
 
 const { listRuns, listComparisons, deleteRun } = vi.hoisted(() => ({
@@ -92,14 +102,16 @@ describe("RunsPage", () => {
     const compare = await screen.findByRole("button", { name: "Compare selected" });
     expect(compare).toBeDisabled();
 
-    await user.click(screen.getByLabelText("Select run-a"));
-    expect(compare).toBeDisabled();
+    expect(screen.queryByLabelText("Select run-a")).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText("Select run-b"));
+    expect(compare).toBeDisabled();
+
+    await user.click(screen.getByLabelText("Select run-c"));
     expect(compare).toBeEnabled();
 
     await user.click(compare);
-    expect(mockNavigate).toHaveBeenCalledWith("/compare?runs=run-a,run-b");
+    expect(mockNavigate).toHaveBeenCalledWith("/compare?runs=run-b,run-c");
   });
 
   it("deletes a run after confirmation", async () => {
@@ -143,7 +155,7 @@ describe("RunsPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByLabelText("Select run-a"));
+    await user.click(await screen.findByLabelText("Select run-b"));
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
