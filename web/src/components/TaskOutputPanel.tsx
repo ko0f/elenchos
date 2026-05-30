@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import type { TaskResult } from "../api/types";
@@ -11,11 +12,42 @@ interface TaskOutputPanelProps {
   pending?: boolean;
 }
 
+const REASONING_PREVIEW_LINES = 4;
+
 function OutputSection({ title, text }: { title: string; text: string }) {
   return (
     <section>
       <h4 className="output-panel__section-title">{title}</h4>
       <pre className="output-panel__block">{text}</pre>
+    </section>
+  );
+}
+
+function CollapsibleOutputSection({ title, text }: { title: string; text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = text.split("\n");
+  const collapsible = lines.length > REASONING_PREVIEW_LINES;
+  const displayText =
+    collapsible && !expanded
+      ? `${lines.slice(0, REASONING_PREVIEW_LINES).join("\n")}\n…`
+      : text;
+
+  return (
+    <section>
+      <div className="output-panel__section-header">
+        <h4 className="output-panel__section-title">{title}</h4>
+        {collapsible && (
+          <button
+            type="button"
+            className="output-panel__expand"
+            onClick={() => setExpanded((open) => !open)}
+            aria-expanded={expanded}
+          >
+            {expanded ? "Show less" : "Show all"}
+          </button>
+        )}
+      </div>
+      <pre className="output-panel__block">{displayText}</pre>
     </section>
   );
 }
@@ -49,7 +81,7 @@ export function TaskOutputPanel({ runId, result, pending = false }: TaskOutputPa
         </p>
       ) : parsed?.reasoning ? (
         <>
-          <OutputSection title="Reasoning" text={parsed.reasoning} />
+          <CollapsibleOutputSection title="Reasoning" text={parsed.reasoning} />
           {parsed.answer ? (
             <OutputSection title="Output" text={parsed.answer} />
           ) : (

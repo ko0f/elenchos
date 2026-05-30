@@ -96,12 +96,32 @@ export const api = {
     return request(`/providers/${encodeURIComponent(name)}/models`);
   },
 
-  createRun(body: CreateRunRequest): Promise<CreateRunResponse> {
-    return request("/runs", {
+  async createRun(body: CreateRunRequest): Promise<CreateRunResponse> {
+    const response = await request<CreateRunResponse>("/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (response.run_id) {
+      return response;
+    }
+    const runId = await api.waitForRunId(response.job_id);
+    return { ...response, run_id: runId };
+  },
+
+  async waitForRunId(jobId: string, timeoutMs = 30_000): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const job = await api.getJob(jobId);
+      if (job.run_id) {
+        return job.run_id;
+      }
+      if (job.status === "error") {
+        throw new Error(job.error ?? "Run failed");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    throw new Error("Timed out waiting for run ID");
   },
 
   prompt(body: PromptRequest): Promise<PromptResponse> {

@@ -362,6 +362,7 @@ def test_post_run_enqueues_job(mock_run_suite, api_client):
     assert response.status_code == 202
     payload = response.json()
     assert "job_id" in payload
+    assert payload["run_id"] == run.run_id
 
     job_id = payload["job_id"]
     for _ in range(50):

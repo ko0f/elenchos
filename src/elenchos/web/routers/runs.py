@@ -74,7 +74,15 @@ def create_run_endpoint(
         judge_model=request.judge,
         concurrency=request.concurrency,
     )
-    return CreateRunResponse(job_id=job.job_id, run_id=job.run_id)
+    run_id = job_manager.wait_for_run_id(job.job_id)
+    if run_id is None:
+        failed = job_manager.get(job.job_id)
+        if failed is not None and failed.status == "error":
+            raise HTTPException(
+                status_code=500,
+                detail=failed.error or "Run failed to start",
+            ) from None
+    return CreateRunResponse(job_id=job.job_id, run_id=run_id)
 
 
 @router.post("/prompt", response_model=PromptResponse)

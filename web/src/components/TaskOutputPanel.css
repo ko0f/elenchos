@@ -3,13 +3,41 @@
   gap: 0.75rem;
 }
 
+.output-panel section > .output-panel__section-title {
+  margin-bottom: 0.35rem;
+}
+
+.output-panel__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
 .output-panel__section-title {
-  margin: 0 0 0.35rem;
+  margin: 0;
   font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
+}
+
+.output-panel__expand {
+  flex-shrink: 0;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--surface);
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.output-panel__expand:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .output-panel__block {

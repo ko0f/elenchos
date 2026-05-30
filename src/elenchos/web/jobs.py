@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -227,6 +228,38 @@ class JobManager:
             job.status = "done"
             job.run_id = outcome.run.run_id
         self._notify(job.job_id)
+
+    def wait_for_run_id(
+        self,
+        job_id: str,
+        *,
+        timeout: float = 30.0,
+    ) -> str | None:
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return None
+                if job.run_id:
+                    return job.run_id
+                if job.status == "error":
+                    return None
+                condition = self._conditions.get(job_id)
+
+            if time.monotonic() >= deadline:
+                with self._lock:
+                    job = self._jobs.get(job_id)
+                    return job.run_id if job else None
+
+            if condition is not None:
+                with condition:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        continue
+                    condition.wait(timeout=min(remaining, 0.5))
+            else:
+                time.sleep(0.05)
 
     def wait_for_progress(
         self,
