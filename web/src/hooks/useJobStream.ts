@@ -8,6 +8,7 @@ export interface JobStreamState {
   events: ProgressEvent[];
   status: JobStreamStatus;
   runId: string | null;
+  comparisonId: string | null;
   summary: Record<string, unknown> | null;
   error: string | null;
 }
@@ -32,11 +33,16 @@ function summaryFromFinished(data: Record<string, unknown> | undefined): Record<
   return data;
 }
 
-function deriveStateFromJob(job: JobStatus): Pick<JobStreamState, "runId" | "summary" | "error"> {
+function deriveStateFromJob(
+  job: JobStatus,
+): Pick<JobStreamState, "runId" | "comparisonId" | "summary" | "error"> {
   const runFinished = job.progress.find((item) => item.event === "run_finished");
+  const compareFinished = job.progress.find((item) => item.event === "compare_finished");
+  const finished = compareFinished ?? runFinished;
   return {
     runId: job.run_id ?? null,
-    summary: summaryFromFinished(runFinished?.data) ?? (job.result as Record<string, unknown> | null) ?? null,
+    comparisonId: job.comparison_id ?? null,
+    summary: summaryFromFinished(finished?.data) ?? (job.result as Record<string, unknown> | null) ?? null,
     error: job.error ?? null,
   };
 }
@@ -46,6 +52,7 @@ export function useJobStream(jobId: string | null): JobStreamState {
     events: [],
     status: jobId ? "connecting" : "done",
     runId: null,
+    comparisonId: null,
     summary: null,
     error: null,
   });
@@ -69,12 +76,19 @@ export function useJobStream(jobId: string | null): JobStreamState {
       setState((prev) => {
         const merged = [...prev.events, ...incoming];
         const runStarted = merged.find((item) => item.event === "run_started");
+        const compareStarted = merged.find((item) => item.event === "compare_started");
         const runFinished = merged.find((item) => item.event === "run_finished");
+        const compareFinished = merged.find((item) => item.event === "compare_finished");
+        const finished = compareFinished ?? runFinished;
         return {
           ...prev,
           events: merged,
           runId: (runStarted?.data.run_id as string | undefined) ?? prev.runId,
-          summary: summaryFromFinished(runFinished?.data) ?? prev.summary,
+          comparisonId:
+            (compareStarted?.data.comparison_id as string | undefined) ??
+            (compareFinished?.data.comparison_id as string | undefined) ??
+            prev.comparisonId,
+          summary: summaryFromFinished(finished?.data) ?? prev.summary,
         };
       });
     };
@@ -104,6 +118,7 @@ export function useJobStream(jobId: string | null): JobStreamState {
           setState((prev) => ({
             ...prev,
             runId: derived.runId ?? prev.runId,
+            comparisonId: derived.comparisonId ?? prev.comparisonId,
             summary: derived.summary ?? prev.summary,
             error: derived.error,
           }));
@@ -161,8 +176,14 @@ export function useJobStream(jobId: string | null): JobStreamState {
       };
 
       source.addEventListener("run_started", handleNamedEvent("run_started"));
+      source.addEventListener("compare_started", handleNamedEvent("compare_started"));
       source.addEventListener("task_done", handleNamedEvent("task_done"));
       source.addEventListener("run_finished", handleNamedEvent("run_finished"));
+      source.addEventListener("compare_finished", (message: MessageEvent) => {
+        handleNamedEvent("compare_finished")(message);
+        finish("done");
+        source?.close();
+      });
 
       source.onerror = () => {
         source?.close();

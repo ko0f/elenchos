@@ -136,6 +136,7 @@ export interface JobStatus {
   kind: string;
   status: "queued" | "running" | "done" | "error";
   run_id?: string | null;
+  comparison_id?: string | null;
   progress: ProgressEvent[];
   result?: Record<string, unknown> | null;
   error?: string | null;
@@ -147,4 +148,68 @@ export interface TaskDoneData {
   total: number;
   score?: number | null;
   error?: string | null;
+}
+
+export interface ComparisonSummary {
+  comparison_id: string;
+  mode: string;
+  judge_model: string;
+  benchmark_id: string;
+  started_at: string;
+  finished_at?: string | null;
+  run_ids: string[];
+  summary?: Record<string, unknown> | null;
+}
+
+export interface TaskComparison {
+  task_id: string;
+  prompt?: string | null;
+  winner_run_id?: string | null;
+  rationale?: string | null;
+  scores?: Record<string, number>;
+}
+
+export interface ComparisonDetail {
+  comparison_id: string;
+  mode: string;
+  judge_model: string;
+  benchmark_id: string;
+  started_at: string;
+  finished_at?: string | null;
+  runs: Array<{ run_id: string; model: string }>;
+  tasks: TaskComparison[];
+  summary?: Record<string, unknown> | null;
+}
+
+export interface CreateCompareRequest {
+  run_ids: string[];
+  mode?: string;
+  judge?: string;
+}
+
+export interface CreateCompareResponse {
+  job_id: string;
+  comparison_id?: string | null;
+}
+
+export interface LeaderboardRow {
+  run_id: string;
+  model: string;
+  benchmark_id?: string | null;
+  mean_score?: number | null;
+  pass_rate?: number | null;
+  p95_latency_ms?: number | null;
+  task_count?: number | null;
+  rank?: number | null;
+  win_rate?: number | null;
+}
+
+export interface LeaderboardReport {
+  benchmark_id?: string | null;
+  runs: LeaderboardRow[];
+}
+
+export interface ReportRequest {
+  run_ids: string[];
+  format: "json" | "md" | "csv";
 }

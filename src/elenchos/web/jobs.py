@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from elenchos.benchmarks.schema import BenchmarkSuite
+from elenchos.compare import CompareError, compare_runs
 from elenchos.config import ElenchosSettings
 from elenchos.runner import RunEventCallback, SuiteRunError, run_suite
 
-JobKind = Literal["run"]
+JobKind = Literal["run", "compare"]
 JobStatus = Literal["queued", "running", "done", "error"]
 
 
@@ -27,6 +28,7 @@ class Job:
     kind: JobKind
     status: JobStatus = "queued"
     run_id: str | None = None
+    comparison_id: str | None = None
     progress: list[ProgressEvent] = field(default_factory=list)
     result: dict[str, Any] | None = None
     error: str | None = None
@@ -87,6 +89,82 @@ class JobManager:
         )
         thread.start()
         return job
+
+    def enqueue_compare(
+        self,
+        run_ids: list[str],
+        *,
+        settings: ElenchosSettings,
+        mode: str | None = None,
+        judge_model: str | None = None,
+    ) -> Job:
+        job = Job(job_id=uuid.uuid4().hex, kind="compare")
+        self._register_job(job)
+
+        thread = threading.Thread(
+            target=self._compare_worker,
+            args=(job, run_ids),
+            kwargs={
+                "settings": settings,
+                "mode": mode,
+                "judge_model": judge_model,
+            },
+            daemon=True,
+            name=f"elenchos-compare-{job.job_id[:8]}",
+        )
+        thread.start()
+        return job
+
+    def _compare_worker(
+        self,
+        job: Job,
+        run_ids: list[str],
+        *,
+        settings: ElenchosSettings,
+        mode: str | None,
+        judge_model: str | None,
+    ) -> None:
+        job.status = "running"
+
+        def on_event(event: str, data: dict[str, Any]) -> None:
+            with self._lock:
+                job.progress.append(ProgressEvent(event=event, data=data))
+                if event == "compare_started":
+                    job.comparison_id = data["comparison_id"]
+                if event == "compare_finished":
+                    job.result = data
+            self._notify(job.job_id)
+
+        try:
+            artifact, _out_path = compare_runs(
+                run_ids,
+                mode=mode,
+                judge_model=judge_model,
+                settings=settings,
+                on_event=on_event,
+            )
+        except CompareError as exc:
+            with self._lock:
+                job.status = "error"
+                job.error = str(exc)
+            self._notify(job.job_id)
+            return
+        except Exception as exc:
+            with self._lock:
+                job.status = "error"
+                job.error = str(exc)
+            self._notify(job.job_id)
+            return
+
+        with self._lock:
+            job.status = "done"
+            job.comparison_id = artifact.comparison_id
+            if job.result is None:
+                job.result = {
+                    "comparison_id": artifact.comparison_id,
+                    "summary": artifact.summary,
+                }
+        self._notify(job.job_id)
 
     def _run_suite_worker(
         self,

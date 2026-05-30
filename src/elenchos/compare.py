@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from elenchos.config import ElenchosSettings, resolve_judge_config
 from elenchos.models import Result, Run, parse_model_id
@@ -15,6 +17,17 @@ from elenchos.scoring.judge import JudgeContext, judge_rubric, pairwise_winner
 from elenchos.storage import find_run, load_results, save_comparison
 
 logger = logging.getLogger(__name__)
+
+CompareEventCallback = Callable[[str, dict[str, Any]], None] | None
+
+
+def _emit_event(
+    callback: CompareEventCallback,
+    event: str,
+    data: dict[str, Any],
+) -> None:
+    if callback is not None:
+        callback(event, data)
 
 
 class CompareError(ValueError):
@@ -148,6 +161,7 @@ def compare_runs(
     judge_model: str | None = None,
     settings: ElenchosSettings | None = None,
     persist: bool = True,
+    on_event: CompareEventCallback = None,
 ) -> tuple[ComparisonArtifact, Path | None]:
     """Compare runs with a judge model; optionally persist artifact."""
     settings = settings or ElenchosSettings()
@@ -188,17 +202,25 @@ def compare_runs(
     if not shared_tasks:
         raise CompareError("No shared successful tasks across the selected runs")
 
+    _emit_event(
+        on_event,
+        "compare_started",
+        {"comparison_id": comparison_id, "task_count": len(shared_tasks)},
+    )
+
     if compare_mode == "pairwise":
         artifact.tasks, artifact.summary = _compare_pairwise(
             entries,
             shared_tasks,
             judge=judge,
+            on_event=on_event,
         )
     elif compare_mode == "rubric":
         artifact.tasks, artifact.summary = _compare_rubric(
             entries,
             shared_tasks,
             judge=judge,
+            on_event=on_event,
         )
     else:
         raise CompareError(f"Unknown compare mode: {compare_mode!r}")
@@ -209,6 +231,15 @@ def compare_runs(
     if persist:
         out_path = save_comparison(artifact, settings=settings)
 
+    _emit_event(
+        on_event,
+        "compare_finished",
+        {
+            "comparison_id": artifact.comparison_id,
+            "summary": artifact.summary,
+        },
+    )
+
     return artifact, out_path
 
 
@@ -217,6 +248,7 @@ def _compare_pairwise(
     task_ids: list[str],
     *,
     judge: JudgeContext,
+    on_event: CompareEventCallback = None,
 ) -> tuple[list[TaskComparison], dict]:
     if len(entries) != 2:
         raise CompareError(
@@ -232,7 +264,7 @@ def _compare_pairwise(
     wins_b = 0
     ties = 0
 
-    for task_id in task_ids:
+    for index, task_id in enumerate(task_ids, start=1):
         result_a = by_a[task_id]
         result_b = by_b[task_id]
         prompt = result_a.prompt or result_b.prompt
@@ -261,6 +293,16 @@ def _compare_pairwise(
                 rationale=rationale,
             )
         )
+        _emit_event(
+            on_event,
+            "task_done",
+            {
+                "task_id": task_id,
+                "index": index,
+                "total": len(task_ids),
+                "winner_run_id": winner_run_id,
+            },
+        )
 
     comparable = len(tasks)
     summary = {
@@ -280,6 +322,7 @@ def _compare_rubric(
     task_ids: list[str],
     *,
     judge: JudgeContext,
+    on_event: CompareEventCallback = None,
 ) -> tuple[list[TaskComparison], dict]:
     from elenchos.benchmarks.registry import resolve_benchmark
 
@@ -291,7 +334,7 @@ def _compare_rubric(
         entry[1].run_id: [] for entry in entries
     }
 
-    for task_id in task_ids:
+    for index, task_id in enumerate(task_ids, start=1):
         suite_task = next((task for task in suite.tasks if task.id == task_id), None)
         rubric_scorer = None
         if suite_task:
@@ -336,6 +379,17 @@ def _compare_rubric(
                 winner_run_id=best_run_id,
                 scores=scores,
             )
+        )
+        _emit_event(
+            on_event,
+            "task_done",
+            {
+                "task_id": task_id,
+                "index": index,
+                "total": len(task_ids),
+                "winner_run_id": best_run_id,
+                "scores": scores,
+            },
         )
 
     summary = {

@@ -6,10 +6,19 @@ export function Layout() {
   return (
     <div className="layout">
       <header className="layout__header">
-        <NavLink to="/benchmarks" className="layout__brand">
+        <NavLink to="/" end className="layout__brand">
           Elenchos
         </NavLink>
         <nav className="layout__nav">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `layout__nav-link${isActive ? " layout__nav-link--active" : ""}`
+            }
+          >
+            Dashboard
+          </NavLink>
           <NavLink
             to="/benchmarks"
             className={({ isActive }) =>
@@ -33,6 +42,14 @@ export function Layout() {
             }
           >
             Prompt
+          </NavLink>
+          <NavLink
+            to="/leaderboard"
+            className={({ isActive }) =>
+              `layout__nav-link${isActive ? " layout__nav-link--active" : ""}`
+            }
+          >
+            Leaderboard
           </NavLink>
         </nav>
         <ProviderHealth />

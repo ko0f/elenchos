@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from elenchos.benchmarks.registry import SuiteSummary
 from elenchos.benchmarks.schema import BenchmarkSuite, GenerationParamsDefaults
@@ -140,11 +140,76 @@ class ProgressEventResponse(BaseModel):
     data: dict
 
 
+class CreateCompareRequest(BaseModel):
+    run_ids: list[str]
+    mode: str | None = None
+    judge: str | None = None
+
+
+class CreateCompareResponse(BaseModel):
+    job_id: str
+    comparison_id: str | None = None
+
+
+class ComparisonSummaryResponse(BaseModel):
+    comparison_id: str
+    mode: str
+    judge_model: str
+    benchmark_id: str
+    started_at: str
+    finished_at: str | None = None
+    run_ids: list[str]
+    summary: dict | None = None
+
+
+class TaskComparisonResponse(BaseModel):
+    task_id: str
+    prompt: str | None = None
+    winner_run_id: str | None = None
+    rationale: str | None = None
+    scores: dict[str, float] = Field(default_factory=dict)
+
+
+class ComparisonDetailResponse(BaseModel):
+    comparison_id: str
+    mode: str
+    judge_model: str
+    benchmark_id: str
+    started_at: str
+    finished_at: str | None = None
+    runs: list[dict]
+    tasks: list[TaskComparisonResponse]
+    summary: dict | None = None
+
+
+class ReportRequest(BaseModel):
+    run_ids: list[str]
+    format: str = "json"
+
+
+class LeaderboardRowResponse(BaseModel):
+    run_id: str
+    model: str
+    benchmark_id: str | None = None
+    mean_score: float | None = None
+    pass_rate: float | None = None
+    p95_latency_ms: float | None = None
+    task_count: int | None = None
+    rank: int | None = None
+    win_rate: float | None = None
+
+
+class LeaderboardResponse(BaseModel):
+    benchmark_id: str | None = None
+    runs: list[LeaderboardRowResponse]
+
+
 class JobStatusResponse(BaseModel):
     job_id: str
     kind: str
     status: str
     run_id: str | None = None
+    comparison_id: str | None = None
     progress: list[ProgressEventResponse]
     result: dict | None = None
     error: str | None = None
@@ -246,10 +311,61 @@ def job_status_from_domain(job: object) -> JobStatusResponse:
         kind=job.kind,
         status=job.status,
         run_id=job.run_id,
+        comparison_id=getattr(job, "comparison_id", None),
         progress=[
             ProgressEventResponse(event=item.event, data=item.data)
             for item in job.progress
         ],
         result=job.result,
         error=job.error,
+    )
+
+
+def comparison_summary_from_dict(payload: dict) -> ComparisonSummaryResponse:
+    return ComparisonSummaryResponse(
+        comparison_id=payload["comparison_id"],
+        mode=payload["mode"],
+        judge_model=payload["judge_model"],
+        benchmark_id=payload["benchmark_id"],
+        started_at=payload["started_at"],
+        finished_at=payload.get("finished_at"),
+        run_ids=payload.get("run_ids", []),
+        summary=payload.get("summary"),
+    )
+
+
+def comparison_detail_from_dict(payload: dict) -> ComparisonDetailResponse:
+    return ComparisonDetailResponse(
+        comparison_id=payload["comparison_id"],
+        mode=payload["mode"],
+        judge_model=payload["judge_model"],
+        benchmark_id=payload["benchmark_id"],
+        started_at=payload["started_at"],
+        finished_at=payload.get("finished_at"),
+        runs=payload.get("runs", []),
+        tasks=[
+            TaskComparisonResponse.model_validate(task)
+            for task in payload.get("tasks", [])
+        ],
+        summary=payload.get("summary"),
+    )
+
+
+def leaderboard_from_domain(report) -> LeaderboardResponse:
+    return LeaderboardResponse(
+        benchmark_id=report.benchmark_id,
+        runs=[
+            LeaderboardRowResponse(
+                run_id=row.run_id,
+                model=row.model,
+                benchmark_id=row.benchmark_id,
+                mean_score=row.mean_score,
+                pass_rate=row.pass_rate,
+                p95_latency_ms=row.p95_latency_ms,
+                task_count=row.task_count,
+                rank=row.rank,
+                win_rate=row.win_rate,
+            )
+            for row in report.rows
+        ],
     )

@@ -1,11 +1,17 @@
 import type {
+  ComparisonDetail,
+  ComparisonSummary,
+  CreateCompareRequest,
+  CreateCompareResponse,
   CreateRunRequest,
   CreateRunResponse,
   JobStatus,
+  LeaderboardReport,
   ModelsResponse,
   PromptRequest,
   PromptResponse,
   Provider,
+  ReportRequest,
   RunDetail,
   RunSummary,
   SuiteDetail,
@@ -88,6 +94,46 @@ export const api = {
   getJob(jobId: string): Promise<JobStatus> {
     return request(`/jobs/${encodeURIComponent(jobId)}`);
   },
+
+  createCompare(body: CreateCompareRequest): Promise<CreateCompareResponse> {
+    return request("/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  listComparisons(): Promise<ComparisonSummary[]> {
+    return request("/comparisons");
+  },
+
+  getComparison(id: string): Promise<ComparisonDetail> {
+    return request(`/comparisons/${encodeURIComponent(id)}`);
+  },
+
+  async buildReport(body: ReportRequest): Promise<LeaderboardReport | string> {
+    const response = await fetch(`${API_BASE}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      let detail = response.statusText;
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        if (payload.detail) {
+          detail = payload.detail;
+        }
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
+    }
+    if (body.format === "json") {
+      return (await response.json()) as LeaderboardReport;
+    }
+    return response.text();
+  },
 };
 
 export const queryKeys = {
@@ -100,4 +146,7 @@ export const queryKeys = {
   providers: ["providers"] as const,
   providerModels: (name: string) => ["providers", name, "models"] as const,
   job: (id: string) => ["jobs", id] as const,
+  comparisons: ["comparisons"] as const,
+  comparison: (id: string) => ["comparisons", id] as const,
+  leaderboard: (runIds: string[]) => ["leaderboard", ...runIds] as const,
 };

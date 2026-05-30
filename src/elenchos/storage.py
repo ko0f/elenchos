@@ -184,6 +184,67 @@ def _comparison_dir_name(*, started_at: datetime, mode: str, comparison_id: str)
     return f"{stamp}_{mode_part}_{comparison_id}"
 
 
+def _read_comparison_json(path: Path) -> dict:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def list_comparisons(
+    settings: ElenchosSettings | None = None,
+) -> list[dict]:
+    """Return comparison summaries newest-first from ~/.elenchos/comparisons/."""
+    root = comparisons_root(settings)
+    if not root.is_dir():
+        return []
+
+    summaries: list[dict] = []
+    for entry in root.iterdir():
+        if not entry.is_dir():
+            continue
+        path = entry / "comparison.json"
+        if not path.is_file():
+            continue
+        payload = _read_comparison_json(path)
+        summaries.append(
+            {
+                "comparison_id": payload.get("comparison_id"),
+                "mode": payload.get("mode"),
+                "judge_model": payload.get("judge_model"),
+                "benchmark_id": payload.get("benchmark_id"),
+                "started_at": payload.get("started_at"),
+                "finished_at": payload.get("finished_at"),
+                "run_ids": [
+                    item.get("run_id")
+                    for item in payload.get("runs", [])
+                    if item.get("run_id")
+                ],
+                "summary": payload.get("summary"),
+            }
+        )
+
+    summaries.sort(key=lambda item: item.get("started_at") or "", reverse=True)
+    return summaries
+
+
+def find_comparison(
+    comparison_id: str,
+    settings: ElenchosSettings | None = None,
+) -> tuple[Path, dict] | None:
+    root = comparisons_root(settings)
+    if not root.is_dir():
+        return None
+    for entry in root.iterdir():
+        if not entry.is_dir():
+            continue
+        path = entry / "comparison.json"
+        if not path.is_file():
+            continue
+        payload = _read_comparison_json(path)
+        if payload.get("comparison_id") == comparison_id:
+            return entry, payload
+    return None
+
+
 def save_comparison(
     artifact,
     *,

@@ -4,8 +4,10 @@ from fastapi.responses import JSONResponse
 from elenchos import __version__
 from elenchos.benchmarks import BenchmarkNotFoundError, format_suite_error
 from elenchos.benchmarks.schema import SuiteValidationError
+from elenchos.compare import CompareError
+from elenchos.reporter import ReportError
 from elenchos.runner import SuiteRunError
-from elenchos.web.routers import benchmarks, jobs, providers, runs
+from elenchos.web.routers import benchmarks, compare, jobs, providers, runs
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
@@ -33,6 +35,20 @@ def _register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+    @app.exception_handler(CompareError)
+    async def compare_error(
+        _request: Request,
+        exc: CompareError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(ReportError)
+    async def report_error(
+        _request: Request,
+        exc: ReportError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -53,6 +69,7 @@ def create_app() -> FastAPI:
     api.include_router(benchmarks.router)
     api.include_router(runs.router)
     api.include_router(jobs.router)
+    api.include_router(compare.router)
 
     app.include_router(api)
     return app

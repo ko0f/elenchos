@@ -1,0 +1,10 @@
+.compare-run-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.compare-run-list code {
+  font-family: var(--mono);
+}

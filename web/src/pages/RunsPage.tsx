@@ -1,14 +1,29 @@
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
-import { formatDate, meanScore } from "../lib/format";
 import { ScoreBadge } from "../components/ScoreBadge";
+import { formatDate, meanScore } from "../lib/format";
+import { canCompareRuns } from "../lib/runs";
+import "../components/RunLauncher.css";
+import "../components/RunPicker.css";
 
 export function RunsPage() {
+  const navigate = useNavigate();
+  const [selected, setSelected] = useState<string[]>([]);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.runs,
     queryFn: api.listRuns,
   });
+
+  const compareEnabled = useMemo(
+    () => (data ? canCompareRuns(selected, data) : false),
+    [selected, data],
+  );
+
+  function goCompare() {
+    void navigate(`/compare?runs=${selected.map(encodeURIComponent).join(",")}`);
+  }
 
   if (isLoading) {
     return <div className="page-state">Loading runs…</div>;
@@ -38,12 +53,32 @@ export function RunsPage() {
     <>
       <header className="page-header">
         <h1>Runs</h1>
-        <p className="page-header__subtitle">Past benchmark run results.</p>
+        <p className="page-header__subtitle">Select runs to compare or open details.</p>
       </header>
+
+      <div className="selection-actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!compareEnabled}
+          onClick={goCompare}
+        >
+          Compare selected
+        </button>
+        <Link to="/leaderboard" className="btn">
+          Leaderboard
+        </Link>
+        {selected.length > 0 && !compareEnabled && (
+          <span className="selection-actions__hint">
+            Compare needs 2+ runs from the same benchmark.
+          </span>
+        )}
+      </div>
 
       <table className="runs-table">
         <thead>
           <tr>
+            <th aria-label="Select" />
             <th>Run ID</th>
             <th>Started</th>
             <th>Benchmark</th>
@@ -54,6 +89,20 @@ export function RunsPage() {
         <tbody>
           {data.map((run) => (
             <tr key={run.run_id}>
+              <td>
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${run.run_id}`}
+                  checked={selected.includes(run.run_id)}
+                  onChange={() => {
+                    if (selected.includes(run.run_id)) {
+                      setSelected(selected.filter((id) => id !== run.run_id));
+                    } else {
+                      setSelected([...selected, run.run_id]);
+                    }
+                  }}
+                />
+              </td>
               <td>
                 <Link to={`/runs/${run.run_id}`}>{run.run_id}</Link>
               </td>
