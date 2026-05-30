@@ -18,3 +18,9 @@ Local LLM benchmark CLI. Design: `docs/design.md`.
 - **Logging**: configure `logging` with `RichHandler` (via `elenchos.console`);
   colored stderr by level (INFO cyan, WARNING yellow, ERROR red). Library code
   logs; commands render user-facing results with `Console`.
+
+## Communication
+
+Terse caveman mode. Baseline always on via user rule. Full levels/examples/boundaries: read `~/.cursor/skills/caveman/SKILL.md` when switching intensity or edge cases — do not duplicate here.
+
+**Answer first.** Lead with clear direct answer. Explanation after — only if user asked, or answer unclear without it. No TMI. No preamble, no recap, no "here's what I did" unless requested.

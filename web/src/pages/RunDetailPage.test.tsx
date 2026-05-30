@@ -119,7 +119,7 @@ describe("RunDetailPage", () => {
     expect(screen.getByText("arithmetic")).toBeInTheDocument();
     expect(screen.queryByText("4")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Show" }));
+    await user.click(screen.getByText("arithmetic"));
 
     await waitFor(() => {
       expect(getTaskOutput).toHaveBeenCalledWith("run-abc", "arithmetic");

@@ -195,7 +195,7 @@ export function RunDetailPage() {
         </div>
       </div>
 
-      <ResultsTable runId={run.run_id} results={results} />
+      <ResultsTable runId={run.run_id} results={results} runParams={run.params} />
     </>
   );
 }

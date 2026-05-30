@@ -53,6 +53,46 @@ export function formatTokenBreakdown(
   return parts.join(", ");
 }
 
+export function maxContextTokens(
+  params: Record<string, unknown> | null | undefined,
+): number | null {
+  const value = params?.max_tokens;
+  return typeof value === "number" && value > 0 ? value : null;
+}
+
+export function formatContextWindow(
+  promptTokens: number | null | undefined,
+  completionTokens: number | null | undefined,
+  maxContextTokens: number | null | undefined,
+): string {
+  if (promptTokens == null && completionTokens == null) {
+    return "—";
+  }
+  const used = (promptTokens ?? 0) + (completionTokens ?? 0);
+  const usedLabel = used.toLocaleString();
+  if (maxContextTokens == null) {
+    return usedLabel;
+  }
+  return `${usedLabel} / ${maxContextTokens.toLocaleString()}`;
+}
+
+export function formatContextWindowTitle(
+  promptTokens: number | null | undefined,
+  completionTokens: number | null | undefined,
+  maxContextTokens: number | null | undefined,
+): string | undefined {
+  const breakdown = formatTokenBreakdown(promptTokens, completionTokens);
+  if (maxContextTokens == null) {
+    return breakdown;
+  }
+  const parts: string[] = [];
+  if (breakdown) {
+    parts.push(breakdown);
+  }
+  parts.push(`Max context: ${maxContextTokens.toLocaleString()} tokens`);
+  return parts.join(" · ");
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) {
     return "—";

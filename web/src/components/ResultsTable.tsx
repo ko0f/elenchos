@@ -1,6 +1,13 @@
 import { Fragment, useState } from "react";
 import type { TaskResult } from "../api/types";
-import { formatLatency, formatTokenBreakdown, formatTokens } from "../lib/format";
+import {
+  formatContextWindow,
+  formatContextWindowTitle,
+  formatLatency,
+  formatTokenBreakdown,
+  formatTokens,
+  maxContextTokens,
+} from "../lib/format";
 import { ScoreBadge } from "./ScoreBadge";
 import { TaskOutputPanel } from "./TaskOutputPanel";
 import "./ResultsTable.css";
@@ -8,10 +15,12 @@ import "./ResultsTable.css";
 interface ResultsTableProps {
   runId: string;
   results: TaskResult[];
+  runParams?: Record<string, unknown> | null;
 }
 
-export function ResultsTable({ runId, results }: ResultsTableProps) {
+export function ResultsTable({ runId, results, runParams }: ResultsTableProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const contextLimit = maxContextTokens(runParams);
 
   const toggle = (taskId: string) => {
     setExpanded((current) => (current === taskId ? null : taskId));
@@ -25,6 +34,7 @@ export function ResultsTable({ runId, results }: ResultsTableProps) {
           <th>Score</th>
           <th>Latency</th>
           <th>Tokens</th>
+          <th>Context</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -56,6 +66,20 @@ export function ResultsTable({ runId, results }: ResultsTableProps) {
                 >
                   {formatTokens(result.prompt_tokens, result.completion_tokens)}
                 </td>
+                <td
+                  className="results-table__tokens"
+                  title={formatContextWindowTitle(
+                    result.prompt_tokens,
+                    result.completion_tokens,
+                    contextLimit,
+                  )}
+                >
+                  {formatContextWindow(
+                    result.prompt_tokens,
+                    result.completion_tokens,
+                    contextLimit,
+                  )}
+                </td>
                 <td>
                   {result.error ? (
                     <span className="results-table__error">error</span>
@@ -72,7 +96,7 @@ export function ResultsTable({ runId, results }: ResultsTableProps) {
               </tr>
               {isOpen && (
                 <tr className="results-table__detail-row">
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="results-table__detail">
                       <TaskOutputPanel runId={runId} result={result} />
                     </div>
