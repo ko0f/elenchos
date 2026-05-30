@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from elenchos.baseline import BaselineComparison, BaselineTask
 from elenchos.benchmarks.registry import SuiteSummary
 from elenchos.benchmarks.schema import BenchmarkSuite, GenerationParamsDefaults
 from elenchos.models import BenchmarkRef, Result, Run
@@ -73,6 +74,25 @@ class RunSummaryResponse(BaseModel):
     benchmark: BenchmarkRefResponse | None = None
     finished_at: str | None = None
     summary: dict | None = None
+    is_baseline: bool = False
+    baseline_score: float | None = None
+    baseline_run_id: str | None = None
+
+
+class BaselineTaskResponse(BaseModel):
+    task_id: str
+    baseline_score: float
+    score: float
+    delta: float
+
+
+class BaselineComparisonResponse(BaseModel):
+    baseline_run_id: str
+    baseline_model: str
+    relative_score: float | None
+    is_baseline: bool
+    tasks: list[BaselineTaskResponse]
+    computed_at: str
 
 
 class RunMetadataResponse(BaseModel):
@@ -104,6 +124,7 @@ class ResultResponse(BaseModel):
 class RunDetailResponse(BaseModel):
     run: RunMetadataResponse
     results: list[ResultResponse]
+    baseline_comparison: BaselineComparisonResponse | None = None
 
 
 class RunJobResponse(BaseModel):
@@ -288,7 +309,41 @@ def benchmark_ref_from_domain(ref: BenchmarkRef | None) -> BenchmarkRefResponse 
     return BenchmarkRefResponse(id=ref.id, version=ref.version)
 
 
-def run_summary_from_domain(run: Run) -> RunSummaryResponse:
+def baseline_comparison_from_domain(
+    comparison: BaselineComparison | None,
+) -> BaselineComparisonResponse | None:
+    if comparison is None:
+        return None
+    return BaselineComparisonResponse(
+        baseline_run_id=comparison.baseline_run_id,
+        baseline_model=comparison.baseline_model,
+        relative_score=comparison.relative_score,
+        is_baseline=comparison.is_baseline,
+        tasks=[
+            BaselineTaskResponse(
+                task_id=task.task_id,
+                baseline_score=task.baseline_score,
+                score=task.score,
+                delta=task.delta,
+            )
+            for task in comparison.tasks
+        ],
+        computed_at=comparison.computed_at,
+    )
+
+
+def run_summary_from_domain(
+    run: Run,
+    *,
+    comparison: BaselineComparison | None = None,
+) -> RunSummaryResponse:
+    is_baseline = False
+    baseline_score: float | None = None
+    baseline_run_id: str | None = None
+    if comparison is not None:
+        is_baseline = comparison.is_baseline
+        baseline_score = comparison.relative_score
+        baseline_run_id = comparison.baseline_run_id
     return RunSummaryResponse(
         run_id=run.run_id,
         started_at=run.started_at,
@@ -296,6 +351,9 @@ def run_summary_from_domain(run: Run) -> RunSummaryResponse:
         benchmark=benchmark_ref_from_domain(run.benchmark),
         finished_at=run.finished_at,
         summary=run.summary,
+        is_baseline=is_baseline,
+        baseline_score=baseline_score,
+        baseline_run_id=baseline_run_id,
     )
 
 

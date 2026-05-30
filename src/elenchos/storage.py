@@ -323,6 +323,89 @@ def find_run(
     return None
 
 
+def _baselines_path(settings: ElenchosSettings | None = None) -> Path:
+    return _settings(settings).data_dir / "baselines.json"
+
+
+def load_baselines(settings: ElenchosSettings | None = None) -> dict[str, str]:
+    path = _baselines_path(settings)
+    if not path.is_file():
+        return {}
+    with path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): str(value) for key, value in payload.items()}
+
+
+def get_baseline_run_id(
+    benchmark_id: str,
+    settings: ElenchosSettings | None = None,
+) -> str | None:
+    return load_baselines(settings).get(benchmark_id)
+
+
+def _write_baselines(
+    baselines: dict[str, str],
+    settings: ElenchosSettings | None = None,
+) -> None:
+    path = _baselines_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
+        json.dump(baselines, handle, indent=2)
+        handle.write("\n")
+    tmp.replace(path)
+
+
+def set_baseline(
+    benchmark_id: str,
+    run_id: str,
+    settings: ElenchosSettings | None = None,
+) -> None:
+    """Set the baseline run for a benchmark. Raises ValueError if run is invalid."""
+    found = find_run(run_id, settings)
+    if found is None:
+        raise ValueError(f"Run not found: {run_id}")
+    _run_dir, run = found
+    if run.benchmark is None or run.benchmark.id != benchmark_id:
+        raise ValueError(
+            f"Run {run_id!r} benchmark {run.benchmark!r} does not match {benchmark_id!r}"
+        )
+    baselines = load_baselines(settings)
+    baselines[benchmark_id] = run_id
+    _write_baselines(baselines, settings)
+
+
+def clear_baseline(
+    benchmark_id: str,
+    settings: ElenchosSettings | None = None,
+) -> None:
+    baselines = load_baselines(settings)
+    if benchmark_id not in baselines:
+        return
+    del baselines[benchmark_id]
+    _write_baselines(baselines, settings)
+
+
+def write_baseline_score(run_dir: Path, payload: dict) -> None:
+    path = run_dir / "baseline_score.json"
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
+    tmp.replace(path)
+
+
+def read_baseline_score(run_dir: Path) -> dict | None:
+    path = run_dir / "baseline_score.json"
+    if not path.is_file():
+        return None
+    with path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return payload if isinstance(payload, dict) else None
+
+
 def delete_run(
     run_id: str,
     settings: ElenchosSettings | None = None,
@@ -331,6 +414,11 @@ def delete_run(
     found = find_run(run_id, settings)
     if found is None:
         return False
-    run_dir, _run = found
+    run_dir, run = found
+    if run.benchmark is not None:
+        baselines = load_baselines(settings)
+        if baselines.get(run.benchmark.id) == run_id:
+            del baselines[run.benchmark.id]
+            _write_baselines(baselines, settings)
     shutil.rmtree(run_dir)
     return True

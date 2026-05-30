@@ -1,0 +1,60 @@
+.baseline-comparison {
+  margin-top: 2rem;
+}
+
+.baseline-comparison__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.baseline-comparison__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.baseline-comparison__meta {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.baseline-comparison__note {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.baseline-comparison__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.baseline-comparison__table th,
+.baseline-comparison__table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.baseline-comparison__table th {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.baseline-comparison__delta {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.baseline-comparison__delta--pass {
+  color: var(--pass-text);
+}
+
+.baseline-comparison__delta--fail {
+  color: var(--fail-text);
+}
+
+.baseline-comparison__delta--none {
+  color: var(--none-text);
+}

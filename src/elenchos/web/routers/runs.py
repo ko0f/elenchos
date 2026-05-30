@@ -13,17 +13,21 @@ from elenchos.models import (
 from elenchos.providers.registry import get_provider
 from elenchos.providers.base import format_model_output
 from elenchos.runner import SuiteRunError, _validate_suite_for_run
+from elenchos.baseline import get_or_compute_baseline_comparison
 from elenchos.storage import (
     DEFAULT_TASK_ID,
     append_result,
+    clear_baseline,
     create_run,
     delete_run,
     finalize_run,
     find_run,
+    get_baseline_run_id,
     list_runs,
     load_results,
     read_output,
     save_output,
+    set_baseline,
 )
 from elenchos.web.deps import SettingsDep
 from elenchos.web.jobs import job_manager
@@ -35,6 +39,7 @@ from elenchos.web.schemas import (
     RunDetailResponse,
     RunJobResponse,
     RunSummaryResponse,
+    baseline_comparison_from_domain,
     result_from_domain,
     run_metadata_from_domain,
     run_summary_from_domain,
@@ -161,7 +166,11 @@ def prompt_endpoint(
 
 @router.get("/runs", response_model=list[RunSummaryResponse])
 def list_runs_endpoint(settings: SettingsDep) -> list[RunSummaryResponse]:
-    return [run_summary_from_domain(run) for run in list_runs(settings)]
+    summaries: list[RunSummaryResponse] = []
+    for run in list_runs(settings):
+        comparison = get_or_compute_baseline_comparison(run.run_id, settings)
+        summaries.append(run_summary_from_domain(run, comparison=comparison))
+    return summaries
 
 
 @router.delete("/runs/{run_id}", status_code=204)
@@ -178,10 +187,54 @@ def get_run(run_id: str, settings: SettingsDep) -> RunDetailResponse:
 
     run_dir, run = found
     results = load_results(run_dir, include_output=False)
+    comparison = get_or_compute_baseline_comparison(run_id, settings)
     return RunDetailResponse(
         run=run_metadata_from_domain(run),
         results=[result_from_domain(result) for result in results],
+        baseline_comparison=baseline_comparison_from_domain(comparison),
     )
+
+
+@router.post("/runs/{run_id}/baseline", response_model=RunSummaryResponse)
+def set_run_baseline(run_id: str, settings: SettingsDep) -> RunSummaryResponse:
+    found = find_run(run_id, settings)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    _run_dir, run = found
+    if run.benchmark is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run {run_id} has no benchmark and cannot be a baseline",
+        )
+    try:
+        set_baseline(run.benchmark.id, run_id, settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    comparison = get_or_compute_baseline_comparison(run_id, settings)
+    return run_summary_from_domain(run, comparison=comparison)
+
+
+@router.delete("/runs/{run_id}/baseline", status_code=204)
+def clear_run_baseline(run_id: str, settings: SettingsDep) -> None:
+    found = find_run(run_id, settings)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    _run_dir, run = found
+    if run.benchmark is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run {run_id} has no benchmark",
+        )
+    baseline_run_id = get_baseline_run_id(run.benchmark.id, settings)
+    if baseline_run_id != run_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run {run_id} is not the baseline for {run.benchmark.id}",
+        )
+    clear_baseline(run.benchmark.id, settings)
 
 
 @router.get("/runs/{run_id}/job", response_model=RunJobResponse)

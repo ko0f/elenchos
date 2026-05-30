@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -26,6 +26,21 @@ const finishedRunDetail = {
       finish_reason: "stop",
     },
   ],
+  baseline_comparison: {
+    baseline_run_id: "run-base",
+    baseline_model: "ollama/base",
+    relative_score: 1.0,
+    is_baseline: false,
+    computed_at: "2025-01-01T12:00:00Z",
+    tasks: [
+      {
+        task_id: "arithmetic",
+        baseline_score: 1.0,
+        score: 1.0,
+        delta: 0.0,
+      },
+    ],
+  },
 };
 
 const liveRunDetail = {
@@ -116,10 +131,10 @@ describe("RunDetailPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "run-abc" })).toBeInTheDocument();
-    expect(screen.getByText("arithmetic")).toBeInTheDocument();
+    expect(screen.getByText("arithmetic", { selector: ".results-table__task" })).toBeInTheDocument();
     expect(screen.queryByText("4")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("arithmetic"));
+    await user.click(screen.getByText("arithmetic", { selector: ".results-table__task" }));
 
     await waitFor(() => {
       expect(getTaskOutput).toHaveBeenCalledWith("run-abc", "arithmetic");
@@ -138,6 +153,32 @@ describe("RunDetailPage", () => {
     expect(await screen.findByText("1 / 1 tasks")).toBeInTheDocument();
     expect(getRunJob).toHaveBeenCalled();
     expect(getBenchmark).toHaveBeenCalled();
+  });
+
+  it("renders baseline comparison table with delta", async () => {
+    getRun.mockResolvedValue(finishedRunDetail);
+    renderPage();
+
+    const section = (await screen.findByText("Baseline comparison")).closest("section");
+    expect(section).not.toBeNull();
+    const scope = within(section!);
+    expect(scope.getByRole("link", { name: "run-base" })).toBeInTheDocument();
+    expect(scope.getByText("1.00×")).toBeInTheDocument();
+    expect(scope.getByText("0.00")).toBeInTheDocument();
+  });
+
+  it("shows baseline note when run is the baseline", async () => {
+    getRun.mockResolvedValue({
+      ...finishedRunDetail,
+      baseline_comparison: {
+        ...finishedRunDetail.baseline_comparison!,
+        is_baseline: true,
+        tasks: [],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText("This run is the baseline.")).toBeInTheDocument();
   });
 
   it("stops polling and shows interrupted when no active job exists", async () => {

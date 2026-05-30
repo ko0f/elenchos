@@ -1,3 +1,4 @@
+import json
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -252,6 +253,79 @@ def test_get_missing_task_output_returns_404(seeded_run):
     client, run = seeded_run
     response = client.get(f"/api/runs/{run.run_id}/results/missing/output")
     assert response.status_code == 404
+
+
+def _seed_scored_run(settings, *, model: str, scores: dict[str, float]):
+    run_dir, run = create_run(
+        model=model,
+        params={"temperature": 0.0},
+        benchmark=BenchmarkRef(id="text-reasoning-v1", version=1),
+        settings=settings,
+    )
+    for task_id, score in scores.items():
+        append_result(
+            run_dir,
+            Result(task_id=task_id, prompt="p", latency_ms=1.0, score=score),
+        )
+    run.summary = {"mean_score": sum(scores.values()) / len(scores)}
+    finalize_run(run_dir, run)
+    return run
+
+
+def test_set_and_clear_baseline(api_client):
+    client, settings = api_client
+    baseline = _seed_scored_run(settings, model="ollama/base", scores={"a": 1.0})
+    candidate = _seed_scored_run(settings, model="ollama/cand", scores={"a": 0.5})
+
+    missing = client.post("/api/runs/missing-run/baseline")
+    assert missing.status_code == 404
+
+    response = client.post(f"/api/runs/{baseline.run_id}/baseline")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_baseline"] is True
+    assert payload["baseline_score"] == 1.0
+    assert payload["baseline_run_id"] == baseline.run_id
+
+    list_response = client.get("/api/runs")
+    by_id = {item["run_id"]: item for item in list_response.json()}
+    assert by_id[candidate.run_id]["baseline_score"] == 0.5
+    assert by_id[candidate.run_id]["is_baseline"] is False
+
+    detail = client.get(f"/api/runs/{candidate.run_id}")
+    comparison = detail.json()["baseline_comparison"]
+    assert comparison["baseline_run_id"] == baseline.run_id
+    assert comparison["relative_score"] == 0.5
+    assert len(comparison["tasks"]) == 1
+    assert comparison["tasks"][0]["delta"] == -0.5
+
+    wrong_clear = client.delete(f"/api/runs/{candidate.run_id}/baseline")
+    assert wrong_clear.status_code == 400
+
+    cleared = client.delete(f"/api/runs/{baseline.run_id}/baseline")
+    assert cleared.status_code == 204
+
+    after = client.get("/api/runs")
+    assert all(item["baseline_score"] is None for item in after.json())
+
+
+def test_set_baseline_requires_benchmark(api_client):
+    client, settings = api_client
+    run_dir, run = create_run(
+        model="ollama/llama3.1:8b",
+        params={"temperature": 0.0},
+        settings=settings,
+    )
+    finalize_run(run_dir, run)
+    run_json = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    del run_json["benchmark"]
+    (run_dir / "run.json").write_text(
+        json.dumps(run_json, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(f"/api/runs/{run.run_id}/baseline")
+    assert response.status_code == 400
 
 
 @patch("elenchos.web.routers.providers.get_provider")

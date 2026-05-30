@@ -267,12 +267,14 @@ needed for v1.
 ```
 ~/.elenchos/
 ├── config.yaml                     # default provider endpoints, judge model
+├── baselines.json                  # per-benchmark baseline run_id map
 ├── benchmarks/                     # user-authored suites
 │   └── my-suite.yaml
 └── runs/
     └── 2026-05-30T14-03-12_coding-basics_ollama_llama3.1-8b_a1b2c3/
         ├── run.json                # run metadata (see below)
         ├── results.jsonl           # one line per task result
+        ├── baseline_score.json     # cached relative score vs baseline (optional)
         └── outputs/                # raw model outputs per task (optional)
             ├── fizzbuzz.txt
             └── summarize.txt

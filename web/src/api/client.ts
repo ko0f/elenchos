@@ -66,6 +66,14 @@ export const api = {
     return request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
   },
 
+  setBaseline(runId: string): Promise<RunSummary> {
+    return request(`/runs/${encodeURIComponent(runId)}/baseline`, { method: "POST" });
+  },
+
+  clearBaseline(runId: string): Promise<void> {
+    return request(`/runs/${encodeURIComponent(runId)}/baseline`, { method: "DELETE" });
+  },
+
   async getRunJob(runId: string): Promise<RunJob | null> {
     const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}/job`);
     if (response.status === 404) {

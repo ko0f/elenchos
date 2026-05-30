@@ -7,6 +7,8 @@ import { formatDate, formatDuration, formatScore, meanScore } from "../lib/forma
 import { jobStatusLabel } from "../lib/jobStatusLabel";
 import { aggregateResultsSummary, totalLatencyMs } from "../lib/runSummary";
 import { useJobStream } from "../hooks/useJobStream";
+import { BaselineComparison } from "../components/BaselineComparison";
+import { BaselineScoreBadge } from "../components/BaselineScoreBadge";
 import { ResultsTable } from "../components/ResultsTable";
 import { ScoreBadge } from "../components/ScoreBadge";
 import "../components/RunProgress.css";
@@ -175,6 +177,17 @@ export function RunDetailPage() {
             <ScoreBadge score={meanScore(summary)} />
           </div>
         </div>
+        {data.baseline_comparison && (
+          <div className="metric-card">
+            <div className="metric-card__label">vs Baseline</div>
+            <div className="metric-card__value">
+              <BaselineScoreBadge
+                score={data.baseline_comparison.relative_score}
+                isBaseline={data.baseline_comparison.is_baseline}
+              />
+            </div>
+          </div>
+        )}
         <div className="metric-card">
           <div className="metric-card__label">Pass rate</div>
           <div className="metric-card__value">
@@ -196,6 +209,10 @@ export function RunDetailPage() {
       </div>
 
       <ResultsTable runId={run.run_id} results={results} runParams={run.params} />
+
+      {data.baseline_comparison && (
+        <BaselineComparison comparison={data.baseline_comparison} />
+      )}
     </>
   );
 }

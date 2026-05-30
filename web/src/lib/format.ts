@@ -113,6 +113,43 @@ export function formatDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString();
 }
 
+export function baselineScoreVariant(
+  score: number | null | undefined,
+): "pass" | "fail" | "none" {
+  if (score == null) {
+    return "none";
+  }
+  if (score > 1) {
+    return "pass";
+  }
+  if (score < 1) {
+    return "fail";
+  }
+  return "none";
+}
+
+export function formatBaselineScore(score: number | null | undefined): string {
+  if (score == null) {
+    return "—";
+  }
+  return `${score.toFixed(2)}×`;
+}
+
+export function formatDelta(delta: number): string {
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta.toFixed(2)}`;
+}
+
+export function deltaVariant(delta: number): "pass" | "fail" | "none" {
+  if (delta > 0) {
+    return "pass";
+  }
+  if (delta < 0) {
+    return "fail";
+  }
+  return "none";
+}
+
 export function meanScore(summary: Record<string, unknown> | null | undefined): number | null {
   if (!summary || typeof summary.mean_score !== "number") {
     return null;

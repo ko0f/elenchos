@@ -22,6 +22,9 @@ const runs = [
     model: "ollama/a",
     benchmark: { id: "text-reasoning-v1", version: 1 },
     summary: { mean_score: 1.0 },
+    is_baseline: true,
+    baseline_score: 1.0,
+    baseline_run_id: "run-a",
   },
   {
     run_id: "run-b",
@@ -29,18 +32,25 @@ const runs = [
     model: "ollama/b",
     benchmark: { id: "text-reasoning-v1", version: 1 },
     summary: { mean_score: 0.5 },
+    is_baseline: false,
+    baseline_score: 0.5,
+    baseline_run_id: "run-a",
   },
 ];
 
-const { listRuns, deleteRun } = vi.hoisted(() => ({
+const { listRuns, deleteRun, setBaseline, clearBaseline } = vi.hoisted(() => ({
   listRuns: vi.fn(),
   deleteRun: vi.fn(),
+  setBaseline: vi.fn(),
+  clearBaseline: vi.fn(),
 }));
 
 vi.mock("../api/client", () => ({
   api: {
     listRuns,
     deleteRun,
+    setBaseline,
+    clearBaseline,
   },
   queryKeys: {
     runs: ["runs"],
@@ -65,7 +75,11 @@ describe("RunsPage", () => {
     cleanup();
     listRuns.mockClear();
     deleteRun.mockClear();
+    setBaseline.mockClear();
+    clearBaseline.mockClear();
     listRuns.mockResolvedValue(runs);
+    setBaseline.mockResolvedValue(runs[0]);
+    clearBaseline.mockResolvedValue(undefined);
     mockNavigate.mockClear();
     vi.stubGlobal("confirm", () => true);
   });
@@ -107,5 +121,34 @@ describe("RunsPage", () => {
     const [deleteButton] = await screen.findAllByRole("button", { name: "Delete run-a" });
     await user.click(deleteButton);
     expect(deleteRun).not.toHaveBeenCalled();
+  });
+
+  it("renders baseline badge and relative score", async () => {
+    renderPage();
+
+    expect(await screen.findByText("baseline")).toBeInTheDocument();
+    expect(screen.getByText("0.50×")).toBeInTheDocument();
+  });
+
+  it("calls setBaseline when empty star clicked", async () => {
+    listRuns.mockResolvedValue([
+      { ...runs[1], is_baseline: false, baseline_score: null, baseline_run_id: null },
+      { ...runs[0], is_baseline: false, baseline_score: null, baseline_run_id: null },
+    ]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "Set run-b as baseline" }));
+    expect(setBaseline).toHaveBeenCalledWith("run-b", expect.anything());
+  });
+
+  it("calls clearBaseline when filled star clicked", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Clear baseline for run-a" }),
+    );
+    expect(clearBaseline).toHaveBeenCalledWith("run-a", expect.anything());
   });
 });

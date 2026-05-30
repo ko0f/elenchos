@@ -50,6 +50,25 @@ export interface RunSummary {
   benchmark?: BenchmarkRef | null;
   finished_at?: string | null;
   summary?: Record<string, unknown> | null;
+  is_baseline?: boolean;
+  baseline_score?: number | null;
+  baseline_run_id?: string | null;
+}
+
+export interface BaselineTask {
+  task_id: string;
+  baseline_score: number;
+  score: number;
+  delta: number;
+}
+
+export interface BaselineComparison {
+  baseline_run_id: string;
+  baseline_model: string;
+  relative_score: number | null;
+  is_baseline: boolean;
+  tasks: BaselineTask[];
+  computed_at: string;
 }
 
 export interface RunMetadata {
@@ -81,6 +100,7 @@ export interface TaskResult {
 export interface RunDetail {
   run: RunMetadata;
   results: TaskResult[];
+  baseline_comparison?: BaselineComparison | null;
 }
 
 export interface RunJob {
