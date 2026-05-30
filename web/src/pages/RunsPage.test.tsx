@@ -38,19 +38,15 @@ const runs = [
   },
 ];
 
-const { listRuns, deleteRun, setBaseline, clearBaseline } = vi.hoisted(() => ({
+const { listRuns, deleteRun } = vi.hoisted(() => ({
   listRuns: vi.fn(),
   deleteRun: vi.fn(),
-  setBaseline: vi.fn(),
-  clearBaseline: vi.fn(),
 }));
 
 vi.mock("../api/client", () => ({
   api: {
     listRuns,
     deleteRun,
-    setBaseline,
-    clearBaseline,
   },
   queryKeys: {
     runs: ["runs"],
@@ -75,11 +71,7 @@ describe("RunsPage", () => {
     cleanup();
     listRuns.mockClear();
     deleteRun.mockClear();
-    setBaseline.mockClear();
-    clearBaseline.mockClear();
     listRuns.mockResolvedValue(runs);
-    setBaseline.mockResolvedValue(runs[0]);
-    clearBaseline.mockResolvedValue(undefined);
     mockNavigate.mockClear();
     vi.stubGlobal("confirm", () => true);
   });
@@ -130,25 +122,23 @@ describe("RunsPage", () => {
     expect(screen.getByText("0.50×")).toBeInTheDocument();
   });
 
-  it("calls setBaseline when empty star clicked", async () => {
-    listRuns.mockResolvedValue([
-      { ...runs[1], is_baseline: false, baseline_score: null, baseline_run_id: null },
-      { ...runs[0], is_baseline: false, baseline_score: null, baseline_run_id: null },
-    ]);
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.click(await screen.findByRole("button", { name: "Set run-b as baseline" }));
-    expect(setBaseline).toHaveBeenCalledWith("run-b", expect.anything());
-  });
-
-  it("calls clearBaseline when filled star clicked", async () => {
+  it("navigates to run detail when row clicked", async () => {
     const user = userEvent.setup();
     renderPage();
 
     await user.click(
-      await screen.findByRole("button", { name: "Clear baseline for run-a" }),
+      await screen.findByRole("row", {
+        name: "View run: ollama/a, text-reasoning-v1",
+      }),
     );
-    expect(clearBaseline).toHaveBeenCalledWith("run-a", expect.anything());
+    expect(mockNavigate).toHaveBeenCalledWith("/runs/run-a");
+  });
+
+  it("does not navigate when checkbox clicked", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByLabelText("Select run-a"));
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import type { TaskDoneData } from "../api/types";
 import { formatDate, formatDuration, formatScore, meanScore } from "../lib/format";
@@ -9,9 +9,11 @@ import { aggregateResultsSummary, totalLatencyMs } from "../lib/runSummary";
 import { useJobStream } from "../hooks/useJobStream";
 import { BaselineComparison } from "../components/BaselineComparison";
 import { BaselineScoreBadge } from "../components/BaselineScoreBadge";
+import { FaIcon } from "../components/FaIcon";
 import { ResultsTable } from "../components/ResultsTable";
 import { ScoreBadge } from "../components/ScoreBadge";
 import "../components/RunProgress.css";
+import "./RunDetailPage.css";
 
 const LIVE_POLL_MS = 2000;
 const MAX_JOB_LOOKUP_POLLS = 3;
@@ -33,6 +35,7 @@ function metricValue(summary: Record<string, unknown> | null | undefined, key: s
 export function RunDetailPage() {
   const { runId = "" } = useParams();
   const queryClient = useQueryClient();
+  const [baselineError, setBaselineError] = useState<string | null>(null);
   const [jobLookupCount, setJobLookupCount] = useState(0);
   const shouldPollLiveRef = useRef(true);
 
@@ -40,6 +43,37 @@ export function RunDetailPage() {
     setJobLookupCount(0);
     shouldPollLiveRef.current = true;
   }, [runId]);
+
+  const setBaselineMutation = useMutation({
+    mutationFn: api.setBaseline,
+    onSuccess: () => {
+      setBaselineError(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.run(runId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs });
+    },
+    onError: (err) => {
+      setBaselineError(
+        err instanceof Error ? err.message : "Failed to set baseline",
+      );
+    },
+  });
+
+  const clearBaselineMutation = useMutation({
+    mutationFn: api.clearBaseline,
+    onSuccess: () => {
+      setBaselineError(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.run(runId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs });
+    },
+    onError: (err) => {
+      setBaselineError(
+        err instanceof Error ? err.message : "Failed to clear baseline",
+      );
+    },
+  });
+
+  const baselineBusy =
+    setBaselineMutation.isPending || clearBaselineMutation.isPending;
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.run(runId),
@@ -132,6 +166,18 @@ export function RunDetailPage() {
   const statusLabel = isOrphaned
     ? "Interrupted"
     : jobStatusLabel(runJob ? streamStatus : null, shouldPollJob);
+  const isBaseline = Boolean(data.baseline_comparison?.is_baseline);
+
+  function toggleBaseline() {
+    if (baselineBusy) {
+      return;
+    }
+    if (isBaseline) {
+      clearBaselineMutation.mutate(run.run_id);
+    } else {
+      setBaselineMutation.mutate(run.run_id);
+    }
+  }
 
   return (
     <>
@@ -141,6 +187,19 @@ export function RunDetailPage() {
         </p>
         <div className="page-header__title-row">
           <h1>{run.run_id}</h1>
+          <button
+            type="button"
+            className={`baseline-star${isBaseline ? " baseline-star--active" : ""}`}
+            aria-label={
+              isBaseline
+                ? `Clear baseline for ${run.run_id}`
+                : `Set ${run.run_id} as baseline`
+            }
+            disabled={baselineBusy}
+            onClick={toggleBaseline}
+          >
+            <FaIcon icon="star" variant={isBaseline ? "solid" : "regular"} />
+          </button>
           {statusLabel && (
             <span
               className={
@@ -157,6 +216,11 @@ export function RunDetailPage() {
           {run.model}
           {run.benchmark ? ` · ${run.benchmark.id}` : ""} · {formatDate(run.started_at)}
         </p>
+        {baselineError && (
+          <p className="page-header__subtitle page-header__subtitle--error">
+            {baselineError}
+          </p>
+        )}
       </header>
 
       {shouldPollLive && totalTasks != null && (

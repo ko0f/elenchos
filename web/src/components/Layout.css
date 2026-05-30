@@ -196,6 +196,10 @@
   background: var(--surface-hover);
 }
 
+.runs-table tbody tr.runs-table__row {
+  cursor: pointer;
+}
+
 .runs-table a {
   color: var(--accent);
   text-decoration: none;

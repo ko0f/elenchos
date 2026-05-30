@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RunDetailPage } from "./RunDetailPage";
 
 const finishedRunDetail = {
@@ -66,6 +66,8 @@ const liveRunDetail = {
 const getRun = vi.hoisted(() => vi.fn(async () => finishedRunDetail));
 const getRunJob = vi.hoisted(() => vi.fn(async () => null as { job_id: string } | null));
 const getTaskOutput = vi.hoisted(() => vi.fn(async () => "4"));
+const setBaseline = vi.hoisted(() => vi.fn());
+const clearBaseline = vi.hoisted(() => vi.fn());
 const getBenchmark = vi.hoisted(() =>
   vi.fn(async () => ({
     id: "text-reasoning-v1",
@@ -95,6 +97,8 @@ vi.mock("../api/client", () => ({
     getRunJob,
     getBenchmark,
     getTaskOutput,
+    setBaseline,
+    clearBaseline,
   },
   queryKeys: {
     run: (id: string) => ["runs", id],
@@ -122,7 +126,14 @@ function renderPage(path = "/runs/run-abc") {
 
 describe("RunDetailPage", () => {
   beforeEach(() => {
+    cleanup();
     vi.clearAllMocks();
+    setBaseline.mockResolvedValue({});
+    clearBaseline.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("renders results and lazy-loads output on expand", async () => {
@@ -179,6 +190,41 @@ describe("RunDetailPage", () => {
     renderPage();
 
     expect(await screen.findByText("This run is the baseline.")).toBeInTheDocument();
+  });
+
+  it("calls setBaseline when empty star clicked", async () => {
+    getRun.mockResolvedValue({
+      ...finishedRunDetail,
+      baseline_comparison: {
+        ...finishedRunDetail.baseline_comparison!,
+        is_baseline: false,
+      },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Set run-abc as baseline" }),
+    );
+    expect(setBaseline).toHaveBeenCalledWith("run-abc", expect.anything());
+  });
+
+  it("calls clearBaseline when filled star clicked", async () => {
+    getRun.mockResolvedValue({
+      ...finishedRunDetail,
+      baseline_comparison: {
+        ...finishedRunDetail.baseline_comparison!,
+        is_baseline: true,
+        tasks: [],
+      },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Clear baseline for run-abc" }),
+    );
+    expect(clearBaseline).toHaveBeenCalledWith("run-abc", expect.anything());
   });
 
   it("stops polling and shows interrupted when no active job exists", async () => {

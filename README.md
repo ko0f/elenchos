@@ -30,46 +30,37 @@ into your environment with `uv sync` and call `elenchos` directly.
 Provider endpoints resolve in this order: **CLI flags → environment variables →
 `~/.elenchos/config.yaml` → built-in defaults**.
 
-### Environment variables
+## Quick start
 
-Set in `.env` or your shell (prefix `ELENCHOS_`):
+### Web UI
 
-| Variable | Purpose |
-|---|---|
-| `ELENCHOS_OLLAMA_BASE_URL` | Ollama OpenAI-compatible endpoint (default `http://localhost:11434`) |
-| `ELENCHOS_OLLAMA_API_KEY` | Optional API key for Ollama |
-| `ELENCHOS_LMSTUDIO_BASE_URL` | LM Studio endpoint (default `http://localhost:1234/v1`) |
-| `ELENCHOS_LMSTUDIO_API_KEY` | Optional API key for LM Studio |
-| `ELENCHOS_OPENROUTER_BASE_URL` | OpenRouter endpoint |
-| `ELENCHOS_OPENROUTER_API_KEY` | OpenRouter API key |
-| `OPENROUTER_API_KEY` | Also accepted for OpenRouter when not using `ELENCHOS_` prefix |
+Fastest path — build the frontend once, then serve UI and API from one process:
 
-Run data and optional config live under `~/.elenchos/` by default (`ELENCHOS_DATA_DIR`
-to override).
-
-### Config file (optional)
-
-Create `~/.elenchos/config.yaml` for persistent defaults:
-
-```yaml
-providers:
-  ollama:
-    base_url: http://localhost:11434
-  lmstudio:
-    base_url: http://localhost:1234/v1
-  openrouter:
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-
-judge:
-  model: openrouter/anthropic/claude-sonnet-4-6
-  mode: pairwise
-
-defaults:
-  concurrency: 4
+```bash
+# Font Awesome icons (one-time) — see web/vendor/README.md
+ln -sfn /path/to/fontawesome-free-7.2.0-web web/vendor/fontawesome-free-7.2.0-web
+cd web && npm install && npm run build
+uv run elenchos serve --open    # http://127.0.0.1:8765
 ```
 
-## Quick start
+Browse benchmarks, launch runs with live progress, inspect results, compare
+models, and build leaderboards in the browser.
+
+**Development** (hot reload) — run two terminals:
+
+```bash
+# Terminal 1 — BFF
+uv run elenchos serve             # http://127.0.0.1:8765
+
+# Terminal 2 — frontend (proxies /api → :8765)
+cd web && npm install && npm run dev   # http://localhost:5180
+```
+
+More detail: [Web UI](#web-ui).
+
+### CLI
+
+Same workflow from the terminal:
 
 1. **Check providers** — confirm your backend is reachable:
 
@@ -105,8 +96,6 @@ defaults:
    uv run elenchos list
    uv run elenchos show <run-id>
    ```
-
-6. **Or use the web UI** — see [Web UI](#web-ui) (`elenchos serve` + browser).
 
 ## Commands
 
@@ -210,7 +199,7 @@ npm install
 npm run dev                    # http://localhost:5180, proxies /api → :8765
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the
+Open [http://localhost:5180](http://localhost:5180). Vite proxies `/api` to the
 BFF; CORS is enabled for the dev origin automatically when no built UI is present.
 
 ### Production (single process)
