@@ -83,6 +83,10 @@ export interface RunDetail {
   results: TaskResult[];
 }
 
+export interface RunJob {
+  job_id: string;
+}
+
 export interface Provider {
   name: string;
   base_url: string;

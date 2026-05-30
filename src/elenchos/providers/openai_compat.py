@@ -97,13 +97,17 @@ class OpenAICompatProvider:
         logger.debug("response (%0.0f ms): %s", latency_ms, raw)
 
         choice = raw["choices"][0]
+        message = choice.get("message") or {}
         usage = raw.get("usage") or {}
+        content = message.get("content") or ""
+        reasoning = message.get("reasoning_content") or None
 
         return Completion(
-            text=choice.get("message", {}).get("content") or "",
+            text=content,
             prompt_tokens=usage.get("prompt_tokens"),
             completion_tokens=usage.get("completion_tokens"),
             latency_ms=latency_ms,
             raw=raw,
             finish_reason=choice.get("finish_reason"),
+            reasoning=reasoning,
         )

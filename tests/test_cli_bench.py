@@ -36,8 +36,8 @@ def test_bench_show_known_suite():
     result = runner.invoke(app, ["bench", "show", "text-reasoning-v1"])
     assert result.exit_code == 0
     assert "text-reasoning-v1" in result.stdout
-    assert "arithmetic" in result.stdout
-    assert "2+2" in result.stdout
+    assert "time_arithmetic" in result.stdout
+    assert "knights_knaves" in result.stdout
 
 
 def test_bench_show_malformed_yaml(tmp_path: Path):

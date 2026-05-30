@@ -25,6 +25,20 @@ class Completion:
     latency_ms: float
     raw: dict
     finish_reason: str | None
+    reasoning: str | None = None
+
+
+def format_model_output(*, text: str, reasoning: str | None = None) -> str:
+    """Build persisted/display text from answer + optional reasoning trace."""
+    reasoning_text = reasoning.strip() if isinstance(reasoning, str) else ""
+    if not reasoning_text:
+        return text
+    parts = [f"## Reasoning\n\n{reasoning_text}"]
+    if text.strip():
+        parts.append(f"## Output\n\n{text.rstrip()}")
+    else:
+        parts.append("## Output\n\n(no answer — model hit token limit during reasoning)")
+    return "\n\n".join(parts)
 
 
 class Provider(Protocol):

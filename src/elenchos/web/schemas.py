@@ -106,6 +106,10 @@ class RunDetailResponse(BaseModel):
     results: list[ResultResponse]
 
 
+class RunJobResponse(BaseModel):
+    job_id: str
+
+
 class CreateRunRequest(BaseModel):
     benchmark: str
     model: str

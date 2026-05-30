@@ -44,6 +44,13 @@ class JobManager:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def find_by_run_id(self, run_id: str) -> Job | None:
+        with self._lock:
+            for job in self._jobs.values():
+                if job.run_id == run_id and job.status in ("queued", "running"):
+                    return job
+        return None
+
     def _notify(self, job_id: str) -> None:
         with self._lock:
             condition = self._conditions.get(job_id)

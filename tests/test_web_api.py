@@ -198,6 +198,28 @@ def test_get_unknown_run_returns_404(api_client):
     assert response.status_code == 404
 
 
+def test_get_run_job(seeded_run):
+    client, run = seeded_run
+    from elenchos.web.jobs import Job, job_manager
+
+    job = Job(job_id="abc123", kind="run", status="running", run_id=run.run_id)
+    job_manager._register_job(job)
+
+    response = client.get(f"/api/runs/{run.run_id}/job")
+    assert response.status_code == 200
+    assert response.json() == {"job_id": "abc123"}
+
+    job.status = "done"
+    missing = client.get(f"/api/runs/{run.run_id}/job")
+    assert missing.status_code == 404
+
+
+def test_get_run_job_unknown_run_returns_404(api_client):
+    client, _settings = api_client
+    response = client.get("/api/runs/missing-run/job")
+    assert response.status_code == 404
+
+
 def test_get_task_output_plain_text(seeded_run):
     client, run = seeded_run
     response = client.get(f"/api/runs/{run.run_id}/results/arithmetic/output")

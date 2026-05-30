@@ -2,21 +2,33 @@ import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "../api/client";
 import type { TaskResult } from "../api/types";
 import { formatLatency } from "../lib/format";
+import { parseModelOutput } from "../lib/modelOutput";
 import "./TaskOutputPanel.css";
 
 interface TaskOutputPanelProps {
   runId: string;
   result: TaskResult;
+  pending?: boolean;
 }
 
-export function TaskOutputPanel({ runId, result }: TaskOutputPanelProps) {
+function OutputSection({ title, text }: { title: string; text: string }) {
+  return (
+    <section>
+      <h4 className="output-panel__section-title">{title}</h4>
+      <pre className="output-panel__block">{text}</pre>
+    </section>
+  );
+}
+
+export function TaskOutputPanel({ runId, result, pending = false }: TaskOutputPanelProps) {
   const inlineOutput = result.output ?? null;
   const { data: fetchedOutput, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.taskOutput(runId, result.task_id),
     queryFn: () => api.getTaskOutput(runId, result.task_id),
-    enabled: !result.error && inlineOutput == null,
+    enabled: !pending && !result.error && inlineOutput == null,
   });
   const output = inlineOutput ?? fetchedOutput ?? null;
+  const parsed = output != null ? parseModelOutput(output) : null;
 
   return (
     <div className="output-panel">
@@ -29,22 +41,26 @@ export function TaskOutputPanel({ runId, result }: TaskOutputPanelProps) {
 
       {result.error ? (
         <p className="output-panel__error">{result.error}</p>
-      ) : inlineOutput != null ? (
-        <section>
-          <h4 className="output-panel__section-title">Output</h4>
-          <pre className="output-panel__block">{inlineOutput}</pre>
-        </section>
-      ) : isLoading ? (
-        <p className="output-panel__loading">Loading output…</p>
+      ) : pending || isLoading ? (
+        <p className="output-panel__loading">Waiting for model response…</p>
       ) : isError ? (
         <p className="output-panel__error">
           {error instanceof Error ? error.message : "Failed to load output"}
         </p>
-      ) : output ? (
-        <section>
-          <h4 className="output-panel__section-title">Output</h4>
-          <pre className="output-panel__block">{output}</pre>
-        </section>
+      ) : parsed?.reasoning ? (
+        <>
+          <OutputSection title="Reasoning" text={parsed.reasoning} />
+          {parsed.answer ? (
+            <OutputSection title="Output" text={parsed.answer} />
+          ) : (
+            <p className="output-panel__loading">
+              No final answer yet
+              {result.finish_reason === "length" ? " (hit token limit)" : ""}.
+            </p>
+          )}
+        </>
+      ) : parsed?.answer ? (
+        <OutputSection title="Output" text={parsed.answer} />
       ) : (
         <p className="output-panel__loading">No output</p>
       )}

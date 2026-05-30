@@ -24,6 +24,7 @@ from elenchos.models import (
     parse_model_id,
 )
 from elenchos.providers import get_provider, list_provider_names
+from elenchos.providers.base import format_model_output
 from elenchos.reporter import (
     ReportError,
     build_leaderboard,
@@ -338,7 +339,11 @@ def prompt(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    output_ref = save_output(run_dir, DEFAULT_TASK_ID, completion.text)
+    formatted = format_model_output(
+        text=completion.text,
+        reasoning=completion.reasoning,
+    )
+    output_ref = save_output(run_dir, DEFAULT_TASK_ID, formatted)
     append_result(
         run_dir,
         Result(
@@ -353,7 +358,7 @@ def prompt(
     )
     finalize_run(run_dir, run)
 
-    console.print(Panel(completion.text, title=model_id.qualified, expand=False))
+    console.print(Panel(formatted, title=model_id.qualified, expand=False))
 
     metrics = Table(show_header=False, box=None, padding=(0, 1))
     metrics.add_row("Run ID", run.run_id)

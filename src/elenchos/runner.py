@@ -29,7 +29,7 @@ from elenchos.models import (
     generation_params_to_dict,
     parse_model_id,
 )
-from elenchos.providers.base import GenerationParams, Message, Provider
+from elenchos.providers.base import GenerationParams, Message, Provider, format_model_output
 from elenchos.providers.registry import get_provider
 from elenchos.reporter import _score_style
 from elenchos.scoring.deterministic import score_task_output
@@ -268,7 +268,10 @@ def _run_task(
         scorer=score_outcome.scorer,
         passed=score_outcome.passed,
         total=score_outcome.total,
-        output=completion.text,
+        output=format_model_output(
+            text=completion.text,
+            reasoning=completion.reasoning,
+        ),
     )
 
 

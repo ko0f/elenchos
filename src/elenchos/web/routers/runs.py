@@ -11,6 +11,7 @@ from elenchos.models import (
     parse_model_id,
 )
 from elenchos.providers.registry import get_provider
+from elenchos.providers.base import format_model_output
 from elenchos.runner import SuiteRunError, _validate_suite_for_run
 from elenchos.storage import (
     DEFAULT_TASK_ID,
@@ -31,6 +32,7 @@ from elenchos.web.schemas import (
     PromptRequest,
     PromptResponse,
     RunDetailResponse,
+    RunJobResponse,
     RunSummaryResponse,
     result_from_domain,
     run_metadata_from_domain,
@@ -120,7 +122,11 @@ def prompt_endpoint(
             error=str(exc),
         )
 
-    output_ref = save_output(run_dir, DEFAULT_TASK_ID, completion.text)
+    formatted = format_model_output(
+        text=completion.text,
+        reasoning=completion.reasoning,
+    )
+    output_ref = save_output(run_dir, DEFAULT_TASK_ID, formatted)
     append_result(
         run_dir,
         Result(
@@ -136,7 +142,7 @@ def prompt_endpoint(
     finalize_run(run_dir, run)
     return PromptResponse(
         run_id=run.run_id,
-        output=completion.text,
+        output=formatted,
         latency_ms=completion.latency_ms,
         prompt_tokens=completion.prompt_tokens,
         completion_tokens=completion.completion_tokens,
@@ -161,6 +167,18 @@ def get_run(run_id: str, settings: SettingsDep) -> RunDetailResponse:
         run=run_metadata_from_domain(run),
         results=[result_from_domain(result) for result in results],
     )
+
+
+@router.get("/runs/{run_id}/job", response_model=RunJobResponse)
+def get_run_job(run_id: str, settings: SettingsDep) -> RunJobResponse:
+    found = find_run(run_id, settings)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    job = job_manager.find_by_run_id(run_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No active job for run: {run_id}")
+    return RunJobResponse(job_id=job.job_id)
 
 
 @router.get(

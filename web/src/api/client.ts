@@ -13,6 +13,7 @@ import type {
   Provider,
   ReportRequest,
   RunDetail,
+  RunJob,
   RunSummary,
   SuiteDetail,
   SuiteSummary,
@@ -59,6 +60,26 @@ export const api = {
 
   getRun(runId: string): Promise<RunDetail> {
     return request(`/runs/${encodeURIComponent(runId)}`);
+  },
+
+  async getRunJob(runId: string): Promise<RunJob | null> {
+    const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}/job`);
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      let detail = response.statusText;
+      try {
+        const body = (await response.json()) as { detail?: string };
+        if (body.detail) {
+          detail = body.detail;
+        }
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(detail);
+    }
+    return (await response.json()) as RunJob;
   },
 
   getTaskOutput(runId: string, taskId: string): Promise<string> {
@@ -141,6 +162,7 @@ export const queryKeys = {
   benchmark: (id: string) => ["benchmarks", id] as const,
   runs: ["runs"] as const,
   run: (id: string) => ["runs", id] as const,
+  runJob: (id: string) => ["runs", id, "job"] as const,
   taskOutput: (runId: string, taskId: string) =>
     ["runs", runId, "output", taskId] as const,
   providers: ["providers"] as const,

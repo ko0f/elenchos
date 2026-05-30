@@ -95,3 +95,25 @@
   font-size: 0.875rem;
   color: var(--text-secondary);
 }
+
+.run-progress__expand {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--surface);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.run-progress__expand:hover {
+  border-color: var(--accent);
+}
+
+.run-progress__detail-row td {
+  padding: 0;
+  background: var(--surface-alt);
+}
+
+.run-progress__detail {
+  padding: 0.75rem 1rem 1rem;
+}
