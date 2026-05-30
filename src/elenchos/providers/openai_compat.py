@@ -92,15 +92,30 @@ class OpenAICompatProvider:
                     f"Model {model!r} not found on {self.name}. "
                     f"Pull it first (e.g. ollama pull {model}). {detail}"
                 ) from None
+            if response.is_error:
+                logger.error(
+                    "%s chat/completions failed: status=%s model=%s body=%s",
+                    self.name,
+                    response.status_code,
+                    model,
+                    response.text[:500],
+                )
             response.raise_for_status()
             raw = response.json()
 
         latency_ms = (time.perf_counter() - started) * 1000
+        usage = raw.get("usage") or {}
+        logger.info(
+            "%s completion ok: model=%s latency_ms=%.0f tokens=%s",
+            self.name,
+            model,
+            latency_ms,
+            usage.get("total_tokens", "?"),
+        )
         logger.debug("response (%0.0f ms): %s", latency_ms, raw)
 
         choice = raw["choices"][0]
         message = choice.get("message") or {}
-        usage = raw.get("usage") or {}
         content = message.get("content") or ""
         reasoning = message.get("reasoning_content") or None
 

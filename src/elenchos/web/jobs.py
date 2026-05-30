@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
@@ -9,9 +10,11 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from elenchos.benchmarks.schema import BenchmarkSuite
-from elenchos.compare import CompareError, compare_runs
+from elenchos.compare import CompareError, compare_runs, _compare_note
 from elenchos.config import ElenchosSettings
 from elenchos.runner import RunEventCallback, SuiteRunError, run_suite
+
+logger = logging.getLogger(__name__)
 
 JobKind = Literal["run", "compare"]
 JobStatus = Literal["queued", "running", "done", "error"]
@@ -136,6 +139,9 @@ class JobManager:
         judge_effort: str | None,
     ) -> None:
         job.status = "running"
+        _compare_note(
+            f"job {job.job_id[:8]} queued runs={run_ids} mode={mode} judge={judge_model}"
+        )
 
         def on_event(event: str, data: dict[str, Any]) -> None:
             with self._lock:
@@ -156,12 +162,15 @@ class JobManager:
                 on_event=on_event,
             )
         except CompareError as exc:
+            _compare_note(f"job {job.job_id[:8]} failed: {exc}")
             with self._lock:
                 job.status = "error"
                 job.error = str(exc)
             self._notify(job.job_id)
             return
         except Exception as exc:
+            _compare_note(f"job {job.job_id[:8]} failed unexpectedly: {exc}")
+            logger.exception("Compare job %s failed unexpectedly", job.job_id[:8])
             with self._lock:
                 job.status = "error"
                 job.error = str(exc)
@@ -176,6 +185,10 @@ class JobManager:
                     "comparison_id": artifact.comparison_id,
                     "summary": artifact.summary,
                 }
+        _compare_note(
+            f"job {job.job_id[:8]} done comparison_id={artifact.comparison_id} "
+            f"summary={artifact.summary}"
+        )
         self._notify(job.job_id)
 
     def _run_suite_worker(

@@ -10,10 +10,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from elenchos.config import ElenchosSettings, resolve_judge_config
+from elenchos.config import BUILTIN_PROVIDERS, ElenchosSettings, resolve_judge_config
 from elenchos.models import Result, Run, judge_generation_params, parse_model_id
 from elenchos.providers.registry import get_provider
-from elenchos.scoring.judge import JudgeContext, judge_rubric, pairwise_winner
+from elenchos.scoring.judge import (
+    JudgeContext,
+    JudgeProviderError,
+    judge_rubric,
+    pairwise_winner,
+)
+from elenchos.console import console
 from elenchos.storage import find_run, load_results, save_comparison
 
 logger = logging.getLogger(__name__)
@@ -21,11 +27,60 @@ logger = logging.getLogger(__name__)
 CompareEventCallback = Callable[[str, dict[str, Any]], None] | None
 
 
+def _compare_note(message: str) -> None:
+    """User-visible compare progress on stderr (works from web worker threads)."""
+    logger.info(message)
+    console.print(f"[bold cyan]compare[/bold cyan] {message}", highlight=False)
+
+
+def _log_compare_event(event: str, data: dict[str, Any]) -> None:
+    if event == "compare_started":
+        _compare_note(
+            f"started id={data['comparison_id']} tasks={data['task_count']}"
+        )
+        return
+    if event == "judge_call":
+        _compare_note(
+            f"task {data['index']}/{data['total']} {data['task_id']} "
+            f"judging {data['run_id']} ({data['model']})"
+        )
+        return
+    if event == "score_done":
+        _compare_note(
+            f"task {data['index']}/{data['total']} {data['task_id']} "
+            f"{data['run_id']} -> {data['score']:.2f}"
+        )
+        return
+    if event == "task_done":
+        if "scores" in data:
+            parts = ", ".join(
+                f"{run_id}={score:.2f}"
+                for run_id, score in sorted(data["scores"].items())
+            )
+            winner = data.get("winner_run_id") or "tie"
+            _compare_note(
+                f"task {data['index']}/{data['total']} {data['task_id']} "
+                f"done winner={winner} scores=[{parts}]"
+            )
+        else:
+            winner = data.get("winner_run_id") or "tie"
+            _compare_note(
+                f"task {data['index']}/{data['total']} {data['task_id']} "
+                f"done winner={winner}"
+            )
+        return
+    if event == "compare_finished":
+        _compare_note(
+            f"finished id={data['comparison_id']} summary={data['summary']}"
+        )
+
+
 def _emit_event(
     callback: CompareEventCallback,
     event: str,
     data: dict[str, Any],
 ) -> None:
+    _log_compare_event(event, data)
     if callback is not None:
         callback(event, data)
 
@@ -86,10 +141,21 @@ def _build_judge_context(
 ) -> JudgeContext:
     model_id = parse_model_id(judge_model)
     provider = get_provider(model_id.provider, settings=settings)
+    defaults = BUILTIN_PROVIDERS.get(model_id.provider)
+    if defaults and defaults.api_key_env and not provider.api_key:
+        env_name = defaults.api_key_env
+        raise CompareError(
+            f"Judge provider {provider.name!r} requires an API key. "
+            f"Set {env_name} or ELENCHOS_{provider.name.upper()}_API_KEY."
+        )
     if not provider.health_check():
         raise CompareError(
             f"Judge provider {provider.name!r} is unhealthy at {provider.base_url}."
         )
+    _compare_note(
+        f"judge ready model={model_id.qualified} provider={provider.name} "
+        f"endpoint={provider.base_url}"
+    )
     return JudgeContext(
         provider=provider,
         model=model_id.model,
@@ -209,6 +275,11 @@ def compare_runs(
     if not shared_tasks:
         raise CompareError("No shared successful tasks across the selected runs")
 
+    _compare_note(
+        f"mode={compare_mode} benchmark={benchmark_id} judge={judge.qualified} "
+        f"runs={[run.run_id for _, run, _ in entries]}"
+    )
+
     _emit_event(
         on_event,
         "compare_started",
@@ -275,11 +346,24 @@ def _compare_pairwise(
         result_a = by_a[task_id]
         result_b = by_b[task_id]
         prompt = result_a.prompt or result_b.prompt
+        _emit_event(
+            on_event,
+            "judge_call",
+            {
+                "task_id": task_id,
+                "index": index,
+                "total": len(task_ids),
+                "run_id": f"{run_a.run_id} vs {run_b.run_id}",
+                "model": f"{run_a.model} vs {run_b.model}",
+            },
+        )
         winner_label, rationale = pairwise_winner(
             judge,
             prompt=prompt or "",
             output_a=_output_text(result_a),
             output_b=_output_text(result_b),
+            strict=True,
+            context=f"task={task_id}",
         )
 
         if winner_label == "A":
@@ -355,6 +439,10 @@ def _compare_rubric(
             if rubric_scorer
             else "Score quality from 1 (poor) to 5 (excellent)."
         )
+        if rubric_scorer is None and index == 1:
+            _compare_note(
+                "benchmark has no judge_rubric scorer; using generic quality rubric"
+            )
 
         scores: dict[str, float] = {}
         best_run_id: str | None = None
@@ -363,15 +451,43 @@ def _compare_rubric(
         for _, run, results in entries:
             result = _results_by_task(results)[task_id]
             prompt = result.prompt or (suite_task.prompt if suite_task else "")
-            outcome = judge_rubric(
-                judge,
-                prompt=prompt,
-                output=_output_text(result),
-                rubric=rubric,
+            score_context = f"task={task_id} run={run.run_id}"
+            _emit_event(
+                on_event,
+                "judge_call",
+                {
+                    "task_id": task_id,
+                    "index": index,
+                    "total": len(task_ids),
+                    "run_id": run.run_id,
+                    "model": run.model,
+                },
             )
+            try:
+                outcome = judge_rubric(
+                    judge,
+                    prompt=prompt,
+                    output=_output_text(result),
+                    rubric=rubric,
+                    strict=True,
+                    context=score_context,
+                )
+            except JudgeProviderError as exc:
+                raise CompareError(str(exc)) from exc
             score = outcome.score or 0.0
             scores[run.run_id] = score
             mean_scores[run.run_id].append(score)
+            _emit_event(
+                on_event,
+                "score_done",
+                {
+                    "task_id": task_id,
+                    "index": index,
+                    "total": len(task_ids),
+                    "run_id": run.run_id,
+                    "score": score,
+                },
+            )
             if score > best_score:
                 best_score = score
                 best_run_id = run.run_id

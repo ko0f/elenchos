@@ -16,18 +16,22 @@ def setup_logging(level: int = logging.INFO) -> None:
         root.setLevel(level)
         for handler in root.handlers:
             handler.setLevel(level)
-        return
+    else:
+        handler = RichHandler(
+            console=_log_stderr,
+            rich_tracebacks=True,
+            show_time=True,
+            show_path=False,
+        )
+        handler.setLevel(level)
+        logging.basicConfig(
+            level=level,
+            format="%(message)s",
+            datefmt="[%X]",
+            handlers=[handler],
+        )
 
-    handler = RichHandler(
-        console=_log_stderr,
-        rich_tracebacks=True,
-        show_time=True,
-        show_path=False,
-    )
-    handler.setLevel(level)
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=[handler],
-    )
+    logging.getLogger("elenchos").setLevel(level)
+    http_level = logging.DEBUG if level <= logging.DEBUG else logging.WARNING
+    for name in ("httpx", "httpcore", "uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(name).setLevel(http_level)

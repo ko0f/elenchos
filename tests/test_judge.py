@@ -115,6 +115,33 @@ def test_judge_rubric_malformed_returns_zero(judge_ctx: JudgeContext):
     assert outcome.score == 0.0
 
 
+def test_judge_rubric_strict_raises_on_provider_error(judge_ctx: JudgeContext):
+    import httpx
+
+    from elenchos.scoring.judge import JudgeProviderError
+
+    def fail_complete(*_args, **_kwargs):
+        request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+        response = httpx.Response(401, request=request)
+        raise httpx.HTTPStatusError(
+            "Unauthorized",
+            request=request,
+            response=response,
+        )
+
+    judge_ctx.provider.complete = fail_complete  # type: ignore[method-assign]
+
+    with pytest.raises(JudgeProviderError, match="Unauthorized"):
+        judge_rubric(
+            judge_ctx,
+            prompt="Say hi",
+            output="Hello",
+            rubric="5 = friendly",
+            strict=True,
+            context="task=t1 run=r1",
+        )
+
+
 def test_pairwise_both_orders_average_to_a(judge_ctx: JudgeContext):
     judge_ctx.provider.responses = [
         '{"winner": "A", "rationale": "first"}',

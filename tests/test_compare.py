@@ -16,6 +16,7 @@ from elenchos.storage import append_result, create_run, finalize_run, save_outpu
 @dataclass
 class MockJudgeProvider:
     name: str = "mock"
+    base_url: str = "http://mock.test/v1"
     responses: list[str] = field(default_factory=list)
     call_index: int = 0
 
@@ -191,6 +192,20 @@ def test_build_judge_context_includes_effort(monkeypatch):
     ctx = _build_judge_context("mock/judge", reasoning_effort="medium")
     assert ctx.params is not None
     assert ctx.params.reasoning_effort == "medium"
+
+
+def test_build_judge_context_requires_openrouter_api_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from elenchos.compare import CompareError, _build_judge_context
+
+    monkeypatch.setenv("ELENCHOS_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ELENCHOS_OPENROUTER_API_KEY", raising=False)
+
+    with pytest.raises(CompareError, match="requires an API key"):
+        _build_judge_context("openrouter/anthropic/claude-opus-4.8")
 
 
 def test_compare_cli_pairwise(tmp_path: Path, monkeypatch):

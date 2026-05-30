@@ -8,9 +8,11 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+import httpx
+
 from elenchos.benchmarks.schema import JudgeRubricScorer
 from elenchos.models import build_messages, default_generation_params
-from elenchos.providers.base import GenerationParams, Provider
+from elenchos.providers.base import Completion, GenerationParams, Provider
 from elenchos.scoring.deterministic import ScoreOutcome
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,10 @@ _JSON_BLOCK_RE = re.compile(
 )
 class JudgeParseError(ValueError):
     """Judge response could not be parsed."""
+
+
+class JudgeProviderError(RuntimeError):
+    """Judge LLM call failed (network, auth, model missing, etc.)."""
 
 
 @dataclass(frozen=True)
@@ -123,6 +129,16 @@ def normalize_rubric_score(parsed: ParsedJudgeResponse) -> float:
     return max(0.0, min(1.0, normalized))
 
 
+def _judge_response_text(completion: Completion) -> str:
+    """Prefer answer text; fall back to reasoning trace for reasoning models."""
+    if completion.text.strip():
+        return completion.text
+    if completion.reasoning and completion.reasoning.strip():
+        logger.debug("Judge answer empty; parsing reasoning_content instead")
+        return completion.reasoning
+    return completion.text
+
+
 def _call_judge(
     judge: JudgeContext,
     user_content: str,
@@ -134,7 +150,45 @@ def _call_judge(
         build_messages(user_content, system=_JUDGE_SYSTEM),
         params or judge.params or default_generation_params(),
     )
-    return completion.text
+    return _judge_response_text(completion)
+
+
+def _is_provider_error(exc: BaseException) -> bool:
+    return isinstance(
+        exc,
+        (
+            httpx.HTTPError,
+            ConnectionError,
+            TimeoutError,
+            RuntimeError,
+        ),
+    )
+
+
+def _handle_judge_failure(
+    exc: BaseException,
+    *,
+    judge: JudgeContext,
+    strict: bool,
+    context: str,
+) -> ScoreOutcome | None:
+    if isinstance(exc, JudgeParseError):
+        logger.warning(
+            "Judge parse failed (%s, model=%s): %s",
+            context,
+            judge.qualified,
+            exc,
+        )
+        return ScoreOutcome(score=0.0, scorer="judge_rubric", passed=0, total=1)
+
+    if not _is_provider_error(exc):
+        raise exc
+
+    message = f"Judge call failed ({context}, model={judge.qualified}): {exc}"
+    logger.error(message)
+    if strict:
+        raise JudgeProviderError(message) from exc
+    return ScoreOutcome(score=0.0, scorer="judge_rubric", passed=0, total=1)
 
 
 _JUDGE_SYSTEM = (
@@ -150,6 +204,8 @@ def judge_rubric(
     output: str,
     rubric: str,
     params: GenerationParams | None = None,
+    strict: bool = False,
+    context: str = "rubric",
 ) -> ScoreOutcome:
     """Score one output against a rubric via the judge model."""
     user_content = (
@@ -166,9 +222,22 @@ def judge_rubric(
         parsed = parse_judge_response(raw)
         normalized = normalize_rubric_score(parsed)
     except Exception as exc:
-        logger.warning("Judge rubric scoring failed: %s", exc)
-        return ScoreOutcome(score=0.0, scorer="judge_rubric", passed=0, total=1)
+        fallback = _handle_judge_failure(
+            exc,
+            judge=judge,
+            strict=strict,
+            context=context,
+        )
+        if fallback is not None:
+            return fallback
+        raise
 
+    logger.info(
+        "Judge rubric scored (%s, model=%s): score=%.3f",
+        context,
+        judge.qualified,
+        normalized,
+    )
     passed = 1 if normalized >= 1.0 else 0
     return ScoreOutcome(
         score=normalized,
@@ -205,6 +274,8 @@ def pairwise_winner(
     output_a: str,
     output_b: str,
     params: GenerationParams | None = None,
+    strict: bool = False,
+    context: str = "pairwise",
 ) -> tuple[str, str | None]:
     """Return winner label A, B, or tie with position-bias mitigation."""
     try:
@@ -223,7 +294,21 @@ def pairwise_winner(
             params=params,
         )
     except Exception as exc:
-        logger.warning("Judge pairwise comparison failed: %s", exc)
+        if _is_provider_error(exc):
+            message = (
+                f"Judge pairwise call failed ({context}, model={judge.qualified}): "
+                f"{exc}"
+            )
+            logger.error(message)
+            if strict:
+                raise JudgeProviderError(message) from exc
+        else:
+            logger.warning(
+                "Judge pairwise comparison failed (%s, model=%s): %s",
+                context,
+                judge.qualified,
+                exc,
+            )
         return "tie", str(exc)
 
     votes_a = 0

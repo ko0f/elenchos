@@ -106,8 +106,13 @@ def serve(
         bool,
         typer.Option("--open", help="Open the UI in a browser"),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Debug logging (includes HTTP traces)"),
+    ] = False,
 ) -> None:
     """Start the web UI backend (BFF)."""
+    _configure_logging(verbose)
     try:
         import uvicorn
     except ImportError as exc:

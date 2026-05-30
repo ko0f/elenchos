@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, Request
@@ -8,6 +9,7 @@ from elenchos import __version__
 from elenchos.benchmarks import BenchmarkNotFoundError, format_suite_error
 from elenchos.benchmarks.schema import SuiteValidationError
 from elenchos.compare import CompareError
+from elenchos.console import setup_logging
 from elenchos.reporter import ReportError
 from elenchos.runner import SuiteRunError
 from elenchos.web.routers import benchmarks, compare, jobs, providers, runs
@@ -66,11 +68,17 @@ def create_app(
 ) -> FastAPI:
     resolved_static = static_dir or static_root()
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        setup_logging()
+        yield
+
     app = FastAPI(
         title="Elenchos",
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
         redoc_url="/api/redoc",
+        lifespan=lifespan,
     )
     _register_exception_handlers(app)
 
