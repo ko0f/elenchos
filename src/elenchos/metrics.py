@@ -1,4 +1,4 @@
-from lmbench.models import RunResult
+from elenchos.models import RunResult
 
 
 def summarize_results(results: list[RunResult]) -> dict:

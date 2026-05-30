@@ -1,10 +1,10 @@
-# ModelBench — Design Document
+# Elenchos — Design Document
 
 A CLI tool for assessing and comparing LLM performance across providers.
 
 ## 1. Overview
 
-ModelBench is a command-line Python program that:
+Elenchos is a command-line Python program that:
 
 1. Connects to any model provider (Ollama, LM Studio, OpenRouter, …).
 2. Runs prompts (single or from a benchmark suite) against a chosen model.
@@ -209,7 +209,7 @@ tasks:
 - `coding-basics-v1` — small functions with unit tests.
 - `coding-algorithms-v1` — harder algorithmic problems with unit tests.
 
-User suites live under `~/.modelbench/benchmarks/` or a path passed via
+User suites live under `~/.elenchos/benchmarks/` or a path passed via
 `--benchmark-file`; built-ins are packaged with the app. The **Benchmark
 Registry** merges both and resolves by `id`.
 
@@ -260,12 +260,12 @@ table and can emit Markdown/CSV/JSON.
 
 ## 7. Storage Layout
 
-Plain files under a root dir (default `~/.modelbench/`, override with
-`--data-dir` or `MODELBENCH_DATA_DIR`). Human-inspectable, git-friendly, no DB
+Plain files under a root dir (default `~/.elenchos/`, override with
+`--data-dir` or `ELENCHOS_DATA_DIR`). Human-inspectable, git-friendly, no DB
 needed for v1.
 
 ```
-~/.modelbench/
+~/.elenchos/
 ├── config.yaml                     # default provider endpoints, judge model
 ├── benchmarks/                     # user-authored suites
 │   └── my-suite.yaml
@@ -301,51 +301,51 @@ needed for v1.
 
 Storing each run in its own timestamped directory makes runs immutable and easy
 to compare, archive, or delete. A small index file (or just directory listing)
-supports `modelbench list`.
+supports `elenchos list`.
 
 ## 8. CLI Surface
 
 Built with `typer` (or `argparse`). Commands:
 
 ```
-modelbench providers list                       # configured providers + health
-modelbench models list --provider ollama        # models available on a provider
+elenchos providers list                       # configured providers + health
+elenchos models list --provider ollama        # models available on a provider
 
-modelbench bench list                            # available benchmark suites
-modelbench bench show coding-basics              # tasks in a suite
+elenchos bench list                            # available benchmark suites
+elenchos bench show coding-basics              # tasks in a suite
 
 # Run a benchmark against a model
-modelbench run \
+elenchos run \
     --benchmark coding-basics \
     --model ollama/llama3.1:8b \
     [--temperature 0.0] [--max-tokens 1024] [--concurrency 4] [--repeat 1]
 
 # Quick one-off prompt (no suite)
-modelbench prompt --model lmstudio/qwen2.5-coder-7b "Write a bubble sort in Go"
+elenchos prompt --model lmstudio/qwen2.5-coder-7b "Write a bubble sort in Go"
 
 # Judge / compare existing runs
-modelbench compare <run_id_a> <run_id_b> [<run_id_c> ...] \
+elenchos compare <run_id_a> <run_id_b> [<run_id_c> ...] \
     [--judge openrouter/anthropic/claude-sonnet-4-6] [--mode pairwise|rubric]
 
 # Inspect / manage results
-modelbench list                                  # past runs
-modelbench show <run_id>                         # run detail
-modelbench report --runs <id> <id> --format md   # comparison report
-modelbench export <run_id> --format csv
+elenchos list                                  # past runs
+elenchos show <run_id>                         # run detail
+elenchos report --runs <id> <id> --format md   # comparison report
+elenchos export <run_id> --format csv
 ```
 
 ### Typical workflows
 
 **Single model on a suite**
 ```
-modelbench run --benchmark coding-basics --model ollama/llama3.1:8b
+elenchos run --benchmark coding-basics --model ollama/llama3.1:8b
 ```
 
 **Compare several models** (run each, then compare)
 ```
-modelbench run --benchmark coding-basics --model ollama/llama3.1:8b
-modelbench run --benchmark coding-basics --model lmstudio/qwen2.5-coder-7b
-modelbench compare <run_a> <run_b> --mode pairwise
+elenchos run --benchmark coding-basics --model ollama/llama3.1:8b
+elenchos run --benchmark coding-basics --model lmstudio/qwen2.5-coder-7b
+elenchos compare <run_a> <run_b> --mode pairwise
 ```
 
 A convenience flag `--model` accepting multiple values can fan out the run step
@@ -371,7 +371,7 @@ restart, completed `task_id`s in `results.jsonl` are skipped.
 
 ## 10. Configuration
 
-`~/.modelbench/config.yaml`:
+`~/.elenchos/config.yaml`:
 
 ```yaml
 providers:
@@ -421,9 +421,9 @@ API keys come only from env vars and are never written to run files or logs.
 ## 13. Project Structure
 
 ```
-modelbench/
+elenchos/
 ├── pyproject.toml
-├── modelbench/
+├── elenchos/
 │   ├── cli.py                 # typer app, command wiring
 │   ├── config.py              # config loading + precedence
 │   ├── runner.py              # orchestration

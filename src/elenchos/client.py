@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-from lmbench.config import Settings
+from elenchos.config import Settings
 
 
 def create_client(settings: Settings) -> OpenAI:

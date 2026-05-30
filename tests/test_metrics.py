@@ -1,5 +1,5 @@
-from lmbench.metrics import summarize_results
-from lmbench.models import RunResult
+from elenchos.metrics import summarize_results
+from elenchos.models import RunResult
 
 
 def test_summarize_results():

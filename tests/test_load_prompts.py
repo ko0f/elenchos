@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from lmbench.runner import load_prompts
+from elenchos.runner import load_prompts
 
 
 def test_load_prompts(tmp_path: Path):

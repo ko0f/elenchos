@@ -1,4 +1,4 @@
-# ModelBench — Development Plan
+# Elenchos — Development Plan
 
 Incremental build plan. Each phase is **independently runnable** — at the end of
 every phase you can execute a real command and observe a real result, so progress
@@ -18,18 +18,18 @@ Each phase lists: **Goal**, **What you build**, **How to run/verify it**, and
 **Goal:** an installed CLI that runs and prints its version.
 
 **Build**
-- `pyproject.toml` (package `modelbench`, console script `modelbench`).
-- `modelbench/cli.py` with a `typer` app and a `version` command.
+- `pyproject.toml` (package `elenchos`, console script `elenchos`).
+- `elenchos/cli.py` with a `typer` app and a `version` command.
 - Dev tooling: `pytest`, `ruff`. Empty `tests/` with one smoke test.
 
 **Run / verify**
 ```bash
 pip install -e .
-modelbench version          # prints 0.1.0
+elenchos version          # prints 0.1.0
 pytest                      # 1 passing smoke test
 ```
 
-**Done when:** `modelbench version` works from a clean venv and CI/pytest is green.
+**Done when:** `elenchos version` works from a clean venv and CI/pytest is green.
 
 ---
 
@@ -48,8 +48,8 @@ pytest                      # 1 passing smoke test
 
 **Run / verify**
 ```bash
-modelbench providers list                       # shows ollama: healthy
-modelbench prompt --model ollama/llama3.1:8b "Say hello in one word."
+elenchos providers list                       # shows ollama: healthy
+elenchos prompt --model ollama/llama3.1:8b "Say hello in one word."
 # -> prints model output + latency + token counts
 ```
 
@@ -76,10 +76,10 @@ metrics.
 
 **Run / verify**
 ```bash
-modelbench prompt --model ollama/llama3.1:8b "2+2?"
-modelbench list                  # shows the run just created
-modelbench show <run_id>         # shows prompt, output, latency, tokens
-ls ~/.modelbench/runs/           # files exist on disk
+elenchos prompt --model ollama/llama3.1:8b "2+2?"
+elenchos list                  # shows the run just created
+elenchos show <run_id>         # shows prompt, output, latency, tokens
+ls ~/.elenchos/runs/           # files exist on disk
 ```
 
 **Test**
@@ -103,10 +103,10 @@ ls ~/.modelbench/runs/           # files exist on disk
 
 **Run / verify**
 ```bash
-modelbench bench list                    # lists text-reasoning-v1
-modelbench bench show text-reasoning-v1  # prints its tasks
+elenchos bench list                    # lists text-reasoning-v1
+elenchos bench show text-reasoning-v1  # prints its tasks
 # malformed YAML:
-modelbench bench show ./broken.yaml      # clear validation error, non-zero exit
+elenchos bench show ./broken.yaml      # clear validation error, non-zero exit
 ```
 
 **Test**
@@ -131,9 +131,9 @@ modelbench bench show ./broken.yaml      # clear validation error, non-zero exit
 
 **Run / verify**
 ```bash
-modelbench run --benchmark text-reasoning-v1 --model ollama/llama3.1:8b
+elenchos run --benchmark text-reasoning-v1 --model ollama/llama3.1:8b
 # -> per-task scores + summary table (mean score, pass rate, p95 latency)
-modelbench show <run_id>     # persisted results match what was printed
+elenchos show <run_id>     # persisted results match what was printed
 ```
 
 **Test**
@@ -159,10 +159,10 @@ persisted, viewable results.
 
 **Run / verify**
 ```bash
-modelbench run --benchmark coding-basics-v1 \
+elenchos run --benchmark coding-basics-v1 \
     --model ollama/llama3.1:8b --allow-code-exec
 # -> pass rates per task; failing/timeout code scored 0, run continues
-modelbench run --benchmark coding-basics-v1 --model ollama/...   # no flag -> refuses
+elenchos run --benchmark coding-basics-v1 --model ollama/...   # no flag -> refuses
 ```
 
 **Test**
@@ -186,10 +186,10 @@ the host, and results are scored.
 
 **Run / verify**
 ```bash
-modelbench models list --provider lmstudio
-modelbench run --benchmark text-reasoning-v1 --model lmstudio/<model>
+elenchos models list --provider lmstudio
+elenchos run --benchmark text-reasoning-v1 --model lmstudio/<model>
 export OPENROUTER_API_KEY=...
-modelbench run --benchmark text-reasoning-v1 --model openrouter/<vendor>/<model>
+elenchos run --benchmark text-reasoning-v1 --model openrouter/<vendor>/<model>
 ```
 
 **Test**
@@ -216,9 +216,9 @@ config.
 **Run / verify**
 ```bash
 # produce two runs first
-modelbench run --benchmark text-reasoning-v1 --model ollama/llama3.1:8b
-modelbench run --benchmark text-reasoning-v1 --model lmstudio/<model>
-modelbench compare <run_a> <run_b> --mode pairwise
+elenchos run --benchmark text-reasoning-v1 --model ollama/llama3.1:8b
+elenchos run --benchmark text-reasoning-v1 --model lmstudio/<model>
+elenchos compare <run_a> <run_b> --mode pairwise
 # -> per-task winners + overall win-rate, written as a comparison artifact
 ```
 
@@ -243,9 +243,9 @@ modelbench compare <run_a> <run_b> --mode pairwise
 
 **Run / verify**
 ```bash
-modelbench run --benchmark coding-basics-v1 --model ollama/... --concurrency 4
+elenchos run --benchmark coding-basics-v1 --model ollama/... --concurrency 4
 # interrupt mid-run (Ctrl-C), rerun same command -> resumes, skips completed tasks
-modelbench report --runs <a> <b> <c> --format md   # leaderboard table
+elenchos report --runs <a> <b> <c> --format md   # leaderboard table
 ```
 
 **Test**
@@ -270,7 +270,7 @@ shareable report.
 
 | Phase | Deliverable you can run | Needs |
 |---|---|---|
-| 0 | `modelbench version` | — |
+| 0 | `elenchos version` | — |
 | 1 | `prompt` against Ollama | Ollama |
 | 2 | `list` / `show` persisted runs | Ollama |
 | 3 | `bench list/show` | — |

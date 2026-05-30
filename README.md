@@ -1,6 +1,7 @@
-# lmbench
+# elenchos
 
-Python skeleton for benchmarking local LLMs via [LM Studio](https://lmstudio.ai/).
+CLI for assessing and comparing LLM performance — named for the Socratic *elenchus*
+(cross-examination through dialogue).
 
 ## Setup
 
@@ -14,7 +15,7 @@ Start LM Studio local server on port `1234` with a model loaded.
 ## Run
 
 ```bash
-uv run lmbench run --prompts prompts/sample.jsonl
+uv run elenchos run --prompts prompts/sample.jsonl
 ```
 
 Results write to `results/` as timestamped JSON.
@@ -28,9 +29,9 @@ uv run pytest
 ## Layout
 
 ```
-src/lmbench/     package (client, runner, metrics)
+src/elenchos/    package (client, runner, metrics)
 prompts/         benchmark prompt sets (JSONL)
 results/         run outputs (gitignored)
 tests/           unit tests
-docs/            LM Studio API notes
+docs/            design + LM Studio API notes
 ```

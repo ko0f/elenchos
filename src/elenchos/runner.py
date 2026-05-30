@@ -2,10 +2,10 @@ import json
 from pathlib import Path
 from time import perf_counter
 
-from lmbench.client import create_client, resolve_model
-from lmbench.config import Settings
-from lmbench.metrics import summarize_results
-from lmbench.models import BenchmarkReport, PromptCase, RunResult
+from elenchos.client import create_client, resolve_model
+from elenchos.config import Settings
+from elenchos.metrics import summarize_results
+from elenchos.models import BenchmarkReport, PromptCase, RunResult
 
 
 def load_prompts(path: Path) -> list[PromptCase]:
