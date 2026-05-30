@@ -7,6 +7,7 @@ from elenchos.config import (
     ElenchosSettings,
     list_configured_provider_names,
     normalize_openai_base_url,
+    resolve_judge_config,
     resolve_provider_endpoint,
 )
 from elenchos.providers.registry import get_provider, list_provider_names
@@ -186,3 +187,16 @@ def test_get_provider_custom_from_yaml(tmp_path: Path):
 def test_get_provider_unknown_raises():
     with pytest.raises(ValueError, match="Unknown provider"):
         get_provider("not-a-provider")
+
+
+def test_resolve_judge_config_from_yaml(tmp_path: Path):
+    config_dir = tmp_path / "elenchos"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "judge:\n  model: ollama/llama3.1:8b\n  mode: rubric\n",
+        encoding="utf-8",
+    )
+    settings = ElenchosSettings(data_dir=config_dir)
+    judge = resolve_judge_config(settings=settings)
+    assert judge.model == "ollama/llama3.1:8b"
+    assert judge.mode == "rubric"

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from elenchos.benchmarks.schema import BenchmarkSuite, GenerationParamsDefaults, Task
-from elenchos.config import ElenchosSettings
+from elenchos.config import ElenchosSettings, resolve_judge_config
 from elenchos.console import console
 from elenchos.metrics import aggregate_run_summary
 from elenchos.models import (
@@ -24,11 +24,14 @@ from elenchos.models import (
 from elenchos.providers.base import GenerationParams, Provider
 from elenchos.providers.registry import get_provider
 from elenchos.scoring.deterministic import score_task_output
+from elenchos.scoring.judge import JudgeContext
 from elenchos.storage import append_result, create_run, finalize_run, save_output
 
 logger = logging.getLogger(__name__)
 
-TEXT_SCORERS = frozenset({"exact_match", "regex_match", "contains_all", "metrics"})
+TEXT_SCORERS = frozenset(
+    {"exact_match", "regex_match", "contains_all", "judge_rubric", "metrics"}
+)
 CODING_SCORERS = frozenset({"unit_test", "metrics"})
 
 
@@ -88,23 +91,47 @@ def resolve_generation_params(
     )
 
 
+def _suite_needs_judge(suite: BenchmarkSuite) -> bool:
+    for task in suite.tasks:
+        for scorer in suite.effective_scoring(task):
+            if scorer.type == "judge_rubric":
+                return True
+    return False
+
+
+def _build_judge_context(
+    judge_model: str,
+    *,
+    settings: ElenchosSettings | None = None,
+) -> JudgeContext:
+    model_id = parse_model_id(judge_model)
+    provider = get_provider(model_id.provider, settings=settings)
+    return JudgeContext(
+        provider=provider,
+        model=model_id.model,
+        qualified=model_id.qualified,
+    )
+
+
 def _validate_suite_for_run(
     suite: BenchmarkSuite,
     *,
     allow_code_exec: bool,
+    judge_model: str | None = None,
 ) -> None:
     has_unit_test = False
+
+    if _suite_needs_judge(suite) and not judge_model:
+        raise SuiteRunError(
+            "Benchmark uses judge_rubric scoring. Pass --judge or set "
+            "judge.model in ~/.elenchos/config.yaml."
+        )
 
     for task in suite.tasks:
         task_type = suite.effective_task_type(task)
         for scorer in suite.effective_scoring(task):
             if scorer.type == "unit_test":
                 has_unit_test = True
-            elif scorer.type == "judge_rubric":
-                raise SuiteRunError(
-                    f"Task {task.id!r} uses scorer {scorer.type!r}; "
-                    "judge scoring is not yet enabled."
-                )
             elif task_type == "text" and scorer.type not in TEXT_SCORERS:
                 raise SuiteRunError(
                     f"Task {task.id!r} uses scorer {scorer.type!r}; "
@@ -132,6 +159,7 @@ def _run_task(
     suite: BenchmarkSuite,
     task: Task,
     allow_code_exec: bool = False,
+    judge: JudgeContext | None = None,
 ) -> Result:
     messages = build_messages(task.prompt)
     scorers = suite.effective_scoring(task)
@@ -150,6 +178,8 @@ def _run_task(
     score_outcome = score_task_output(
         completion.text,
         scorers,
+        prompt=task.prompt,
+        judge=judge,
         allow_code_exec=allow_code_exec,
     )
     return Result(
@@ -177,9 +207,21 @@ def run_suite(
     settings: ElenchosSettings | None = None,
     show_progress: bool = True,
     allow_code_exec: bool = False,
+    judge_model: str | None = None,
 ) -> SuiteRunOutcome:
     """Run all tasks in a benchmark suite sequentially."""
-    _validate_suite_for_run(suite, allow_code_exec=allow_code_exec)
+    settings = settings or ElenchosSettings()
+    try:
+        judge_config = resolve_judge_config(settings=settings, cli_judge=judge_model)
+    except ValueError as exc:
+        raise SuiteRunError(str(exc)) from exc
+    effective_judge = judge_config.model or judge_model
+
+    _validate_suite_for_run(
+        suite,
+        allow_code_exec=allow_code_exec,
+        judge_model=effective_judge,
+    )
 
     model_id = parse_model_id(model)
     provider = provider or get_provider(model_id.provider)
@@ -193,6 +235,15 @@ def run_suite(
         raise SuiteRunError(
             f"Provider {provider.name!r} is unhealthy at {provider.base_url}."
         )
+
+    judge_ctx: JudgeContext | None = None
+    if effective_judge and _suite_needs_judge(suite):
+        judge_ctx = _build_judge_context(effective_judge, settings=settings)
+        if not judge_ctx.provider.health_check():
+            raise SuiteRunError(
+                f"Judge provider {judge_ctx.provider.name!r} is unhealthy at "
+                f"{judge_ctx.provider.base_url}."
+            )
 
     benchmark = BenchmarkRef(id=suite.id, version=suite.version)
     run_dir, run = create_run(
@@ -215,6 +266,7 @@ def run_suite(
                 suite=suite,
                 task=task,
                 allow_code_exec=allow_code_exec,
+                judge=judge_ctx,
             )
 
         if result.error:

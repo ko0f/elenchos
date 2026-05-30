@@ -14,6 +14,7 @@ from elenchos.benchmarks import (
     resolve_benchmark,
 )
 from elenchos.benchmarks.schema import SuiteValidationError
+from elenchos.compare import CompareError, compare_runs
 from elenchos.console import console, setup_logging
 from elenchos.models import (
     Result,
@@ -23,7 +24,7 @@ from elenchos.models import (
     parse_model_id,
 )
 from elenchos.providers import get_provider, list_provider_names
-from elenchos.reporter import render_run_report
+from elenchos.reporter import render_comparison_report, render_run_report
 from elenchos.runner import SuiteRunError, run_suite
 from elenchos.storage import (
     DEFAULT_TASK_ID,
@@ -408,6 +409,13 @@ def run(
             help="Allow sandboxed execution of model-generated code (unit_test scorer)",
         ),
     ] = False,
+    judge: Annotated[
+        str | None,
+        typer.Option(
+            "--judge",
+            help="Judge model for judge_rubric scoring (provider/model)",
+        ),
+    ] = None,
 ) -> None:
     """Run a benchmark suite against a model."""
     try:
@@ -426,12 +434,51 @@ def run(
             temperature=temperature,
             max_tokens=max_tokens,
             allow_code_exec=allow_code_exec,
+            judge_model=judge,
         )
     except SuiteRunError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
     render_run_report(outcome.run, outcome.results, outcome.summary)
+
+
+@app.command()
+def compare(
+    run_ids: Annotated[
+        list[str],
+        typer.Argument(help="Run ids to compare (at least two)"),
+    ],
+    mode: Annotated[
+        str | None,
+        typer.Option(
+            "--mode",
+            help="Comparison mode: pairwise (two runs) or rubric",
+        ),
+    ] = None,
+    judge: Annotated[
+        str | None,
+        typer.Option("--judge", help="Judge model (provider/model)"),
+    ] = None,
+) -> None:
+    """Compare benchmark runs using a judge LLM."""
+    if len(run_ids) < 2:
+        console.print("[red]compare requires at least two run ids[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        artifact, comp_dir = compare_runs(
+            run_ids,
+            mode=mode,
+            judge_model=judge,
+        )
+    except CompareError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    render_comparison_report(artifact)
+    if comp_dir is not None:
+        console.print(f"[dim]Comparison saved to {comp_dir}[/dim]")
 
 
 def main() -> None:

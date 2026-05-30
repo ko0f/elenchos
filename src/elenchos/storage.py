@@ -18,7 +18,11 @@ def _settings(settings: ElenchosSettings | None) -> ElenchosSettings:
     return settings or ElenchosSettings()
 
 
-def runs_root(settings: ElenchosSettings | None = None, *, create: bool = False) -> Path:
+def runs_root(
+    settings: ElenchosSettings | None = None,
+    *,
+    create: bool = False,
+) -> Path:
     root = _settings(settings).data_dir / "runs"
     if create:
         root.mkdir(parents=True, exist_ok=True)
@@ -161,6 +165,44 @@ def list_runs(settings: ElenchosSettings | None = None) -> list[Run]:
 
     runs.sort(key=lambda run: run.started_at, reverse=True)
     return runs
+
+
+def comparisons_root(
+    settings: ElenchosSettings | None = None,
+    *,
+    create: bool = False,
+) -> Path:
+    root = _settings(settings).data_dir / "comparisons"
+    if create:
+        root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _comparison_dir_name(*, started_at: datetime, mode: str, comparison_id: str) -> str:
+    stamp = _timestamp_dir(started_at)
+    mode_part = _sanitize_path_component(mode)
+    return f"{stamp}_{mode_part}_{comparison_id}"
+
+
+def save_comparison(
+    artifact,
+    *,
+    settings: ElenchosSettings | None = None,
+) -> Path:
+    """Persist a comparison artifact under ~/.elenchos/comparisons/."""
+    started = datetime.fromisoformat(artifact.started_at.replace("Z", "+00:00"))
+    dir_name = _comparison_dir_name(
+        started_at=started,
+        mode=artifact.mode,
+        comparison_id=artifact.comparison_id,
+    )
+    comp_dir = comparisons_root(settings, create=True) / dir_name
+    comp_dir.mkdir(parents=True, exist_ok=False)
+    path = comp_dir / "comparison.json"
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(artifact.to_dict(), handle, indent=2)
+        handle.write("\n")
+    return comp_dir
 
 
 def find_run(

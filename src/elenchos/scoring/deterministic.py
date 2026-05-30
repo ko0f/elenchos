@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from elenchos.benchmarks.schema import (
     ContainsAllScorer,
     ExactMatchScorer,
+    JudgeRubricScorer,
     MetricsScorer,
     RegexMatchScorer,
     ScorerConfig,
     UnitTestScorer,
 )
+
+if TYPE_CHECKING:
+    from elenchos.scoring.judge import JudgeContext
 
 
 @dataclass(frozen=True)
@@ -21,9 +26,6 @@ class ScoreOutcome:
     scorer: str | None
     passed: int | None = None
     total: int | None = None
-
-
-UNSUPPORTED_SCORERS = frozenset({"judge_rubric"})
 
 
 def normalize_output(text: str) -> str:
@@ -50,16 +52,24 @@ def score_with_scorer(
     output: str,
     scorer: ScorerConfig,
     *,
+    prompt: str | None = None,
+    judge: JudgeContext | None = None,
     allow_code_exec: bool = False,
 ) -> ScoreOutcome:
     if isinstance(scorer, MetricsScorer):
         return ScoreOutcome(score=None, scorer="metrics")
 
-    if scorer.type in UNSUPPORTED_SCORERS:
-        raise ValueError(
-            f"Scorer {scorer.type!r} is not supported in this release "
-            "(requires a judge model)."
-        )
+    if isinstance(scorer, JudgeRubricScorer):
+        from elenchos.scoring.judge import score_judge_rubric
+
+        if not prompt:
+            raise ValueError("judge_rubric scoring requires the task prompt")
+        if judge is None:
+            raise ValueError(
+                "judge_rubric scoring requires a judge model "
+                "(--judge or config judge.model)"
+            )
+        return score_judge_rubric(output, scorer, prompt=prompt, judge=judge)
 
     if isinstance(scorer, UnitTestScorer):
         from elenchos.scoring.code_exec import run_unit_tests
@@ -106,11 +116,19 @@ def score_task_output(
     output: str,
     scorers: list[ScorerConfig],
     *,
+    prompt: str | None = None,
+    judge: JudgeContext | None = None,
     allow_code_exec: bool = False,
 ) -> ScoreOutcome:
     """Score model output against all configured scorers (metrics excluded)."""
     outcomes = [
-        score_with_scorer(output, scorer, allow_code_exec=allow_code_exec)
+        score_with_scorer(
+            output,
+            scorer,
+            prompt=prompt,
+            judge=judge,
+            allow_code_exec=allow_code_exec,
+        )
         for scorer in scorers
     ]
     graded = [outcome for outcome in outcomes if outcome.score is not None]

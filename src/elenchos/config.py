@@ -139,6 +139,38 @@ def _resolve_api_key(
     return None
 
 
+@dataclass(frozen=True)
+class JudgeConfig:
+    model: str | None = None
+    mode: str = "pairwise"
+
+
+def resolve_judge_config(
+    *,
+    settings: ElenchosSettings | None = None,
+    cli_judge: str | None = None,
+    cli_mode: str | None = None,
+) -> JudgeConfig:
+    """Resolve judge settings: CLI > config.yaml > defaults."""
+    settings = settings or ElenchosSettings()
+    yaml_config = load_yaml_config(settings)
+    judge_yaml = yaml_config.get("judge") or {}
+    if not isinstance(judge_yaml, dict):
+        judge_yaml = {}
+
+    model = cli_judge or judge_yaml.get("model")
+    mode = cli_mode or judge_yaml.get("mode") or "pairwise"
+    if mode not in {"pairwise", "rubric"}:
+        raise ValueError(
+            f"Invalid judge mode {mode!r}; expected 'pairwise' or 'rubric'."
+        )
+
+    return JudgeConfig(
+        model=str(model) if model else None,
+        mode=str(mode),
+    )
+
+
 def resolve_provider_endpoint(
     name: str,
     *,
