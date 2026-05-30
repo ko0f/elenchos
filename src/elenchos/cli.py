@@ -45,6 +45,21 @@ app.add_typer(providers_app, name="providers")
 app.add_typer(bench_app, name="bench")
 
 
+def _add_token_rows(
+    table: Table,
+    *,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    finish_reason: str | None,
+) -> None:
+    if prompt_tokens is not None:
+        table.add_row("Prompt tokens", str(prompt_tokens))
+    if completion_tokens is not None:
+        table.add_row("Completion tokens", str(completion_tokens))
+    if finish_reason:
+        table.add_row("Finish reason", finish_reason)
+
+
 def _configure_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.INFO
     setup_logging(level)
@@ -223,12 +238,12 @@ def prompt(
     metrics = Table(show_header=False, box=None, padding=(0, 1))
     metrics.add_row("Run ID", run.run_id)
     metrics.add_row("Latency", f"{completion.latency_ms:.0f} ms")
-    if completion.prompt_tokens is not None:
-        metrics.add_row("Prompt tokens", str(completion.prompt_tokens))
-    if completion.completion_tokens is not None:
-        metrics.add_row("Completion tokens", str(completion.completion_tokens))
-    if completion.finish_reason:
-        metrics.add_row("Finish reason", completion.finish_reason)
+    _add_token_rows(
+        metrics,
+        prompt_tokens=completion.prompt_tokens,
+        completion_tokens=completion.completion_tokens,
+        finish_reason=completion.finish_reason,
+    )
 
     console.print(metrics)
 
@@ -305,12 +320,12 @@ def show(
 
         detail = Table(show_header=False, box=None, padding=(0, 1))
         detail.add_row("Latency", f"{result.latency_ms:.0f} ms")
-        if result.prompt_tokens is not None:
-            detail.add_row("Prompt tokens", str(result.prompt_tokens))
-        if result.completion_tokens is not None:
-            detail.add_row("Completion tokens", str(result.completion_tokens))
-        if result.finish_reason:
-            detail.add_row("Finish reason", result.finish_reason)
+        _add_token_rows(
+            detail,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            finish_reason=result.finish_reason,
+        )
         if result.score is not None:
             detail.add_row("Score", f"{result.score:.2f}")
         console.print(detail)

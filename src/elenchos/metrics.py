@@ -56,12 +56,8 @@ def aggregate_run_summary(results: list[Result]) -> dict:
     scored = [result for result in successful if result.score is not None]
     latencies = [result.latency_ms for result in successful]
 
-    mean_score = _mean(
-        [result.score for result in scored if result.score is not None]
-    )
-    pass_count = sum(
-        1 for result in scored if result.score is not None and result.score >= 1.0
-    )
+    mean_score = _mean([result.score for result in scored])
+    pass_count = sum(1 for result in scored if result.score >= 1.0)
     pass_rate = pass_count / total if total else None
 
     return {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from elenchos.models import (
     Result,
     Run,
     build_messages,
+    generation_params_to_dict,
     parse_model_id,
 )
 from elenchos.providers.base import GenerationParams, Provider
@@ -122,17 +124,6 @@ def _validate_suite_for_run(
         )
 
 
-def _generation_params_to_dict(params: GenerationParams) -> dict:
-    payload: dict = {"temperature": params.temperature, "top_p": params.top_p}
-    if params.max_tokens is not None:
-        payload["max_tokens"] = params.max_tokens
-    if params.seed is not None:
-        payload["seed"] = params.seed
-    if params.stop is not None:
-        payload["stop"] = params.stop
-    return payload
-
-
 def _run_task(
     *,
     provider: Provider,
@@ -206,7 +197,7 @@ def run_suite(
     benchmark = BenchmarkRef(id=suite.id, version=suite.version)
     run_dir, run = create_run(
         model=model_id.qualified,
-        params=_generation_params_to_dict(params),
+        params=generation_params_to_dict(params),
         benchmark=benchmark,
         settings=settings,
     )
@@ -215,17 +206,8 @@ def run_suite(
 
     for index, task in enumerate(suite.tasks, start=1):
         label = f"[{index}/{len(suite.tasks)}] {task.id}"
-        if show_progress:
-            with console.status(label):
-                result = _run_task(
-                    provider=provider,
-                    model_name=model_id.model,
-                    params=params,
-                    suite=suite,
-                    task=task,
-                    allow_code_exec=allow_code_exec,
-                )
-        else:
+        status = console.status(label) if show_progress else contextlib.nullcontext()
+        with status:
             result = _run_task(
                 provider=provider,
                 model_name=model_id.model,
